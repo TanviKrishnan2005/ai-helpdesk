@@ -1,0 +1,282 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f7f7f5;
+  color: #1d1d1d;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+/* Navbar */
+
+.navbar {
+  height: 72px;
+  padding: 0 7%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e5e5e5;
+  background: white;
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.logo span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  border-radius: 8px;
+  background: #171717;
+  color: white;
+  font-size: 13px;
+}
+
+.navbar nav {
+  display: flex;
+  gap: 10px;
+}
+
+.navbar nav button {
+  border: none;
+  background: transparent;
+  padding: 10px 16px;
+  color: #555;
+}
+
+/* Main */
+
+.main {
+  width: min(1000px, 90%);
+  margin: auto;
+  padding: 70px 0;
+}
+
+.hero {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.tag {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #777;
+  margin-bottom: 14px;
+}
+
+.hero h1 {
+  font-size: clamp(42px, 6vw, 70px);
+  line-height: 0.98;
+  letter-spacing: -3px;
+}
+
+.subtitle {
+  max-width: 500px;
+  margin: 20px auto 0;
+  color: #777;
+  line-height: 1.6;
+}
+
+/* Chat */
+
+.chat-container {
+  width: min(700px, 100%);
+  margin: auto;
+  background: white;
+  border: 1px solid #e2e2e2;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.05);
+}
+
+.chat-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.chat-header h2 {
+  font-size: 17px;
+}
+
+.chat-header p {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #777;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #45a66b;
+}
+
+/* Messages */
+
+.messages {
+  min-height: 350px;
+  max-height: 500px;
+  padding: 28px;
+  overflow-y: auto;
+}
+
+.welcome {
+  text-align: center;
+  padding: 50px 20px;
+}
+
+.bot-icon {
+  width: 50px;
+  height: 50px;
+  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: #171717;
+  color: white;
+  font-size: 22px;
+}
+
+.welcome h3 {
+  font-size: 20px;
+}
+
+.welcome p {
+  margin-top: 8px;
+  color: #888;
+}
+
+.suggestions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 25px;
+}
+
+.suggestions button {
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  background: white;
+  color: #555;
+}
+
+.suggestions button:hover {
+  background: #f5f5f5;
+}
+
+/* Individual messages */
+
+.message {
+  max-width: 75%;
+  margin-bottom: 20px;
+}
+
+.user-message {
+  margin-left: auto;
+  text-align: right;
+}
+
+.ai-message {
+  margin-right: auto;
+}
+
+.message-label {
+  font-size: 11px;
+  color: #999;
+  margin-bottom: 5px;
+}
+
+.message-text {
+  display: inline-block;
+  padding: 13px 16px;
+  border-radius: 14px;
+  line-height: 1.5;
+}
+
+.user-message .message-text {
+  background: #171717;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.ai-message .message-text {
+  background: #f1f1ef;
+  color: #333;
+  border-bottom-left-radius: 4px;
+}
+
+/* Input */
+
+.input-area {
+  display: flex;
+  gap: 10px;
+  padding: 18px;
+  border-top: 1px solid #eee;
+}
+
+.input-area input {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 14px;
+  outline: none;
+}
+
+.input-area input:focus {
+  border-color: #999;
+}
+
+.input-area button {
+  border: none;
+  border-radius: 12px;
+  padding: 0 20px;
+  background: #171717;
+  color: white;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .navbar {
+    padding: 0 5%;
+  }
+
+  .main {
+    padding: 40px 0;
+  }
+
+  .hero h1 {
+    letter-spacing: -2px;
+  }
+
+  .message {
+    max-width: 90%;
+  }
+
+  .suggestions {
+    flex-direction: column;
+  }
+}
