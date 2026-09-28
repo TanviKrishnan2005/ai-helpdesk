@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import "./App.css";
 
@@ -7,6 +7,24 @@ function App() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [tickets, setTickets] = useState([]);
+
+  // Fetch real tickets from the backend
+  useEffect(() => {
+    const fetchTickets = async () => {
+      try {
+        const response = await axios.get(
+          "http://127.0.0.1:8000/tickets/"
+        );
+
+        setTickets(response.data);
+      } catch (error) {
+        console.error("Failed to fetch tickets:", error);
+      }
+    };
+
+    fetchTickets();
+  }, []);
 
   const sendMessage = async (text = message) => {
     if (!text.trim() || loading) return;
@@ -43,6 +61,8 @@ function App() {
         },
       ]);
     } catch (error) {
+      console.error(error);
+
       setMessages((prev) => [
         ...prev,
         {
@@ -81,6 +101,7 @@ function App() {
 
         <div className="brand">
           <div className="brand-mark">H</div>
+
           <div>
             <strong>helpdesk</strong>
             <span>support workspace</span>
@@ -118,7 +139,7 @@ function App() {
           >
             <span>□</span>
             My Tickets
-            <b>3</b>
+            <b>{tickets.length}</b>
           </button>
         </div>
 
@@ -137,6 +158,7 @@ function App() {
         </div>
 
         <div className="sidebar-bottom">
+
           <div className="mini-status">
             <span></span>
             All systems operational
@@ -144,12 +166,15 @@ function App() {
 
           <div className="profile">
             <div className="avatar">T</div>
+
             <div>
               <strong>Tanvi</strong>
               <small>Student</small>
             </div>
+
             <span className="dots">•••</span>
           </div>
+
         </div>
 
       </aside>
@@ -159,6 +184,7 @@ function App() {
 
         {/* TOP BAR */}
         <header className="topbar">
+
           <div className="breadcrumbs">
             Workspace <span>/</span> {activePage}
           </div>
@@ -168,16 +194,25 @@ function App() {
             <button className="icon-button">?</button>
             <div className="top-avatar">T</div>
           </div>
+
         </header>
 
-        {/* OVERVIEW */}
+        {/* ================= OVERVIEW ================= */}
+
         {activePage === "overview" && (
           <section className="page">
 
             <div className="welcome-row">
+
               <div>
-                <p className="eyebrow">MONDAY, SEPTEMBER 21</p>
-                <h1>Good evening, Tanvi.</h1>
+                <p className="eyebrow">
+                  MONDAY, SEPTEMBER 21
+                </p>
+
+                <h1>
+                  Good evening, Tanvi.
+                </h1>
+
                 <p className="page-subtitle">
                   What can we help you sort out today?
                 </p>
@@ -190,12 +225,15 @@ function App() {
                 <span>+</span>
                 Ask for help
               </button>
+
             </div>
 
             {/* AI HERO */}
+
             <div className="support-card">
 
               <div className="support-copy">
+
                 <div className="ai-badge">
                   <span>✦</span>
                   AI SUPPORT
@@ -211,9 +249,11 @@ function App() {
                   Our support assistant searches the help center
                   and guides you through the next step.
                 </p>
+
               </div>
 
               <div className="question-box">
+
                 <textarea
                   placeholder="Tell us what's going wrong..."
                   value={message}
@@ -227,23 +267,36 @@ function App() {
                 />
 
                 <div className="question-footer">
-                  <span>Press Enter to send</span>
+
+                  <span>
+                    Press Enter to send
+                  </span>
 
                   <button onClick={() => sendMessage()}>
                     Ask AI
                     <span>→</span>
                   </button>
+
                 </div>
+
               </div>
 
             </div>
 
             {/* QUICK ACTIONS */}
+
             <div className="section-heading">
+
               <div>
-                <p className="eyebrow">QUICK START</p>
-                <h3>What do you need help with?</h3>
+                <p className="eyebrow">
+                  QUICK START
+                </p>
+
+                <h3>
+                  What do you need help with?
+                </h3>
               </div>
+
             </div>
 
             <div className="quick-grid">
@@ -257,24 +310,42 @@ function App() {
                     sendMessage(item.text);
                   }}
                 >
-                  <div className="quick-icon">{item.icon}</div>
 
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p>{item.text}</p>
+                  <div className="quick-icon">
+                    {item.icon}
                   </div>
 
-                  <span className="arrow">↗</span>
+                  <div>
+                    <strong>
+                      {item.title}
+                    </strong>
+
+                    <p>
+                      {item.text}
+                    </p>
+                  </div>
+
+                  <span className="arrow">
+                    ↗
+                  </span>
+
                 </button>
               ))}
 
             </div>
 
             {/* RECENT TICKETS */}
+
             <div className="section-heading tickets-heading">
+
               <div>
-                <p className="eyebrow">YOUR ACTIVITY</p>
-                <h3>Recent tickets</h3>
+                <p className="eyebrow">
+                  YOUR ACTIVITY
+                </p>
+
+                <h3>
+                  Recent tickets
+                </h3>
               </div>
 
               <button
@@ -283,6 +354,7 @@ function App() {
               >
                 View all →
               </button>
+
             </div>
 
             <div className="ticket-table">
@@ -294,73 +366,102 @@ function App() {
                 <span>UPDATED</span>
               </div>
 
-              <div className="ticket-row">
-                <span className="ticket-id">#1042</span>
-                <span className="ticket-subject">
-                  Wi-Fi connection issue
-                </span>
-                <span>
-                  <i className="status open"></i>
-                  Open
-                </span>
-                <span className="muted">Today</span>
-              </div>
+              {tickets.length === 0 ? (
+                <div className="ticket-row">
+                  <span>-</span>
+                  <span className="ticket-subject">
+                    No tickets yet
+                  </span>
+                  <span>-</span>
+                  <span className="muted">
+                    -
+                  </span>
+                </div>
+              ) : (
+                tickets.slice(0, 3).map((ticket) => (
+                  <div
+                    className="ticket-row"
+                    key={ticket.id}
+                  >
 
-              <div className="ticket-row">
-                <span className="ticket-id">#1041</span>
-                <span className="ticket-subject">
-                  Password reset
-                </span>
-                <span>
-                  <i className="status resolved"></i>
-                  Resolved
-                </span>
-                <span className="muted">Yesterday</span>
-              </div>
+                    <span className="ticket-id">
+                      #{ticket.id}
+                    </span>
 
-              <div className="ticket-row">
-                <span className="ticket-id">#1038</span>
-                <span className="ticket-subject">
-                  Software installation
-                </span>
-                <span>
-                  <i className="status resolved"></i>
-                  Resolved
-                </span>
-                <span className="muted">Sep 18</span>
-              </div>
+                    <span className="ticket-subject">
+                      {ticket.subject}
+                    </span>
+
+                    <span>
+                      <i
+                        className={`status ${
+                          ticket.status.toLowerCase()
+                        }`}
+                      ></i>
+
+                      {ticket.status}
+                    </span>
+
+                    <span className="muted">
+                      {ticket.created_at
+                        ? new Date(
+                            ticket.created_at
+                          ).toLocaleDateString()
+                        : "-"}
+                    </span>
+
+                  </div>
+                ))
+              )}
 
             </div>
 
           </section>
         )}
 
-        {/* ASSISTANT */}
+        {/* ================= ASSISTANT ================= */}
+
         {activePage === "assistant" && (
           <section className="page assistant-page">
 
             <div className="assistant-top">
+
               <div>
-                <p className="eyebrow">AI SUPPORT</p>
-                <h1>Support Assistant</h1>
+
+                <p className="eyebrow">
+                  AI SUPPORT
+                </p>
+
+                <h1>
+                  Support Assistant
+                </h1>
+
                 <p className="page-subtitle">
                   Describe the problem. We'll help you work through it.
                 </p>
+
               </div>
 
               <div className="online">
                 <span></span>
                 Online
               </div>
+
             </div>
 
             <div className="conversation">
 
               {messages.length === 0 ? (
-                <div className="empty-chat">
-                  <div className="large-ai-icon">✦</div>
 
-                  <h2>What can we help with?</h2>
+                <div className="empty-chat">
+
+                  <div className="large-ai-icon">
+                    ✦
+                  </div>
+
+                  <h2>
+                    What can we help with?
+                  </h2>
 
                   <p>
                     Ask about accounts, networks, software,
@@ -368,9 +469,12 @@ function App() {
                   </p>
 
                   <div className="suggestion-list">
+
                     <button
                       onClick={() =>
-                        sendMessage("I can't access my account")
+                        sendMessage(
+                          "I can't access my account"
+                        )
                       }
                     >
                       I can't access my account
@@ -379,7 +483,9 @@ function App() {
 
                     <button
                       onClick={() =>
-                        sendMessage("My Wi-Fi isn't working")
+                        sendMessage(
+                          "My Wi-Fi isn't working"
+                        )
                       }
                     >
                       My Wi-Fi isn't working
@@ -388,53 +494,74 @@ function App() {
 
                     <button
                       onClick={() =>
-                        sendMessage("I need software support")
+                        sendMessage(
+                          "I need software support"
+                        )
                       }
                     >
                       I need software support
                       <span>→</span>
                     </button>
+
                   </div>
+
                 </div>
+
               ) : (
+
                 <div className="messages-list">
 
                   {messages.map((msg, index) => (
                     <div
                       key={index}
                       className={`conversation-message ${
-                        msg.type === "user" ? "from-user" : "from-ai"
+                        msg.type === "user"
+                          ? "from-user"
+                          : "from-ai"
                       }`}
                     >
+
                       <div className="message-meta">
-                        {msg.type === "user" ? "YOU" : "AI SUPPORT"}
+                        {msg.type === "user"
+                          ? "YOU"
+                          : "AI SUPPORT"}
                       </div>
 
                       <div className="message-bubble">
                         {msg.text}
                       </div>
+
                     </div>
                   ))}
 
                   {loading && (
                     <div className="conversation-message from-ai">
-                      <div className="message-meta">AI SUPPORT</div>
+
+                      <div className="message-meta">
+                        AI SUPPORT
+                      </div>
+
                       <div className="message-bubble typing">
                         <span></span>
                         <span></span>
                         <span></span>
                       </div>
+
                     </div>
                   )}
 
                 </div>
+
               )}
 
               <div className="assistant-input">
+
                 <textarea
                   placeholder="Describe your issue..."
                   value={message}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={(e) =>
+                    setMessage(e.target.value)
+                  }
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -443,10 +570,13 @@ function App() {
                   }}
                 />
 
-                <button onClick={() => sendMessage()}>
+                <button
+                  onClick={() => sendMessage()}
+                >
                   Send
                   <span>→</span>
                 </button>
+
               </div>
 
             </div>
@@ -454,109 +584,175 @@ function App() {
           </section>
         )}
 
-        {/* TICKETS */}
+        {/* ================= TICKETS ================= */}
+
         {activePage === "tickets" && (
           <section className="page">
 
             <div className="welcome-row">
+
               <div>
-                <p className="eyebrow">SUPPORT</p>
-                <h1>My tickets</h1>
+
+                <p className="eyebrow">
+                  SUPPORT
+                </p>
+
+                <h1>
+                  My tickets
+                </h1>
+
                 <p className="page-subtitle">
                   Track your open and resolved support requests.
                 </p>
+
               </div>
 
               <button
                 className="new-ticket"
-                onClick={() => setActivePage("assistant")}
+                onClick={() =>
+                  setActivePage("assistant")
+                }
               >
                 <span>+</span>
                 New request
               </button>
+
             </div>
 
+            {/* TICKET SUMMARY */}
+
             <div className="ticket-summary">
+
               <div>
                 <span>OPEN</span>
-                <strong>1</strong>
+
+                <strong>
+                  {
+                    tickets.filter(
+                      (ticket) =>
+                        ticket.status?.toLowerCase() ===
+                        "open"
+                    ).length
+                  }
+                </strong>
               </div>
 
               <div>
                 <span>IN PROGRESS</span>
-                <strong>0</strong>
+
+                <strong>
+                  {
+                    tickets.filter(
+                      (ticket) =>
+                        ticket.status?.toLowerCase() ===
+                        "in progress"
+                    ).length
+                  }
+                </strong>
               </div>
 
               <div>
                 <span>RESOLVED</span>
-                <strong>2</strong>
+
+                <strong>
+                  {
+                    tickets.filter(
+                      (ticket) =>
+                        ticket.status?.toLowerCase() ===
+                        "resolved"
+                    ).length
+                  }
+                </strong>
               </div>
+
             </div>
+
+            {/* REAL TICKET LIST */}
 
             <div className="full-ticket-list">
 
-              <div className="full-ticket">
-                <div className="full-ticket-id">#1042</div>
+              {tickets.length === 0 ? (
 
-                <div className="full-ticket-main">
-                  <h3>Wi-Fi connection issue</h3>
+                <div className="empty-chat">
+
+                  <div className="large-ai-icon">
+                    □
+                  </div>
+
+                  <h2>
+                    No tickets yet
+                  </h2>
+
                   <p>
-                    Unable to connect to the university network.
+                    Your support requests will appear here.
                   </p>
 
-                  <div className="ticket-meta">
-                    <span>Network</span>
-                    <span>Medium priority</span>
+                  <button
+                    className="new-ticket"
+                    onClick={() =>
+                      setActivePage("assistant")
+                    }
+                  >
+                    <span>+</span>
+                    Ask for help
+                  </button>
+
+                </div>
+
+              ) : (
+
+                tickets.map((ticket) => (
+
+                  <div
+                    className="full-ticket"
+                    key={ticket.id}
+                  >
+
+                    <div className="full-ticket-id">
+                      #{ticket.id}
+                    </div>
+
+                    <div className="full-ticket-main">
+
+                      <h3>
+                        {ticket.subject}
+                      </h3>
+
+                      <p>
+                        {ticket.description}
+                      </p>
+
+                      <div className="ticket-meta">
+
+                        <span>
+                          {ticket.category}
+                        </span>
+
+                        <span>
+                          {ticket.priority} priority
+                        </span>
+
+                      </div>
+
+                    </div>
+
+                    <div className="ticket-status">
+
+                      <i
+                        className={`status ${
+                          ticket.status?.toLowerCase()
+                        }`}
+                      ></i>
+
+                      {ticket.status}
+
+                    </div>
+
                   </div>
-                </div>
 
-                <div className="ticket-status">
-                  <i className="status open"></i>
-                  Open
-                </div>
-              </div>
+                ))
 
-              <div className="full-ticket">
-                <div className="full-ticket-id">#1041</div>
-
-                <div className="full-ticket-main">
-                  <h3>Password reset</h3>
-                  <p>
-                    Unable to reset account password.
-                  </p>
-
-                  <div className="ticket-meta">
-                    <span>Account</span>
-                    <span>Low priority</span>
-                  </div>
-                </div>
-
-                <div className="ticket-status">
-                  <i className="status resolved"></i>
-                  Resolved
-                </div>
-              </div>
-
-              <div className="full-ticket">
-                <div className="full-ticket-id">#1038</div>
-
-                <div className="full-ticket-main">
-                  <h3>Software installation</h3>
-                  <p>
-                    Request for approved software installation.
-                  </p>
-
-                  <div className="ticket-meta">
-                    <span>Software</span>
-                    <span>Low priority</span>
-                  </div>
-                </div>
-
-                <div className="ticket-status">
-                  <i className="status resolved"></i>
-                  Resolved
-                </div>
-              </div>
+              )}
 
             </div>
 
@@ -564,6 +760,7 @@ function App() {
         )}
 
       </main>
+
     </div>
   );
 }
