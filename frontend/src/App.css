@@ -925,3 +925,86 @@ h1 {
     grid-column: 2;
   }
 }
+
+.ticket-form {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 28px;
+  margin-bottom: 28px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  background: var(--cream);
+  padding: 13px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: var(--coral);
+}
+
+.form-group textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.ticket-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  align-items: center;
+}
+
+.cancel-button {
+  border: 1px solid var(--line);
+  background: transparent;
+  padding: 12px 18px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.cancel-button:hover {
+  background: var(--cream);
+}
+
+.ticket-form-message {
+  font-size: 13px;
+  color: var(--coral);
+  margin-bottom: 16px;
+}
+
+.new-ticket:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
