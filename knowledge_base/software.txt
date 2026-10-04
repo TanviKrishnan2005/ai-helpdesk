@@ -1,0 +1,11 @@
+Software Support
+
+If an application is not working correctly:
+
+1. Close and reopen the application.
+2. Restart your device.
+3. Check whether the application has pending updates.
+4. Make sure your device has enough available storage.
+5. If the problem continues, reinstall the application if permitted.
+
+If the issue remains unresolved, contact the support team.

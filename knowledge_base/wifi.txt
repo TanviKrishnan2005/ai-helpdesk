@@ -1,0 +1,13 @@
+Wi-Fi Troubleshooting
+
+If you are unable to connect to Wi-Fi:
+
+1. Check that Wi-Fi is enabled on your device.
+2. Make sure you are connected to the correct network.
+3. Turn Wi-Fi off and on again.
+4. Restart your device.
+5. Forget the Wi-Fi network and reconnect using the correct password.
+6. Check whether other devices can connect to the same network.
+7. If no devices can connect, the network or router may be experiencing an issue.
+
+If the problem continues after these steps, contact the support team.
