@@ -17,17 +17,37 @@ def chat(message: str):
     results = search_knowledge_base(message)
 
     if results:
+        best_score = results[0]["score"]
+
+        if best_score < 0.35:
+            return {
+                "response": (
+                    "I couldn't find enough information in the "
+                    "knowledge base to confidently answer this question."
+                ),
+                "resolved": False,
+                "confidence": best_score
+            }
+
         context = "\n\n".join(
             result["content"]
             for result in results
         )
+
     else:
-        context = "No relevant information was found in the knowledge base."
+        return {
+            "response": (
+                "I couldn't find relevant information "
+                "in the knowledge base."
+            ),
+            "resolved": False,
+            "confidence": 0
+        }
 
     prompt = f"""
 You are a helpful customer support assistant.
 
-Answer the user's question using the knowledge base provided below.
+Answer the user's question using only the knowledge base provided below.
 
 Knowledge base:
 {context}
@@ -36,8 +56,6 @@ User question:
 {message}
 
 Give a clear and practical answer.
-If the knowledge base does not contain enough information to answer the question,
-say that you do not have enough information and recommend contacting support.
 """
 
     response = ollama.chat(
@@ -51,5 +69,7 @@ say that you do not have enough information and recommend contacting support.
     )
 
     return {
-        "response": response["message"]["content"]
+        "response": response["message"]["content"],
+        "resolved": True,
+        "confidence": results[0]["score"]
     }
