@@ -132,8 +132,21 @@ function App() {
           text: response.data.response,
         },
       ]);
+
+      // Refresh tickets when AI creates a ticket
+      if (response.data.resolved === false) {
+        const ticketResponse = await axios.get(
+          "http://127.0.0.1:8000/tickets/"
+        );
+
+        setTickets(ticketResponse.data);
+      }
+
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Failed to send message:",
+        error
+      );
 
       setMessages((prev) => [
         ...prev,

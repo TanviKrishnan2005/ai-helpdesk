@@ -5,7 +5,10 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..services.retriever import search_knowledge_base
-from ..services.ticket_service import create_support_ticket
+from ..services.ticket_service import (
+    create_support_ticket,
+    classify_ticket
+)
 
 
 router = APIRouter(
@@ -27,12 +30,14 @@ def chat(
 
         if best_score < 0.35:
 
+            category, priority = classify_ticket(message)
+
             ticket = create_support_ticket(
                 db=db,
-                subject="AI Support Request",
+                subject=message[:80],
                 description=message,
-                category="General",
-                priority="Medium"
+                category=category,
+                priority=priority
             )
 
             return {
@@ -54,12 +59,14 @@ def chat(
 
     else:
 
+        category, priority = classify_ticket(message)
+
         ticket = create_support_ticket(
             db=db,
-            subject="AI Support Request",
+            subject=message[:80],
             description=message,
-            category="General",
-            priority="Medium"
+            category=category,
+            priority=priority
         )
 
         return {
