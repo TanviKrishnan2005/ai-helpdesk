@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import axios from "axios";
+
 function Overview({
   message,
   setMessage,
@@ -5,6 +8,32 @@ function Overview({
   setActivePage,
   tickets,
 }) {
+  const [stats, setStats] = useState({
+    total_tickets: 0,
+    open_tickets: 0,
+    high_priority: 0,
+    resolved_tickets: 0,
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await axios.get(
+          "http://127.0.0.1:8000/dashboard/stats"
+        );
+
+        setStats(response.data);
+      } catch (error) {
+        console.error(
+          "Failed to fetch dashboard stats:",
+          error
+        );
+      }
+    };
+
+    fetchStats();
+  }, [tickets]);
+
   const quickQuestions = [
     {
       icon: "⌁",
@@ -149,6 +178,117 @@ function Overview({
 
       </div>
 
+      {/* DASHBOARD STATS */}
+
+      <div className="section-heading">
+
+        <div>
+          <p className="eyebrow">
+            SUPPORT OVERVIEW
+          </p>
+
+          <h3>
+            Helpdesk at a glance
+          </h3>
+        </div>
+
+      </div>
+
+      <div className="stats-grid">
+
+        <div className="stat-card">
+          <span className="stat-label">
+            TOTAL TICKETS
+          </span>
+
+          <strong>
+            {stats.total_tickets}
+          </strong>
+        </div>
+
+        <div className="stat-card">
+          <span className="stat-label">
+            OPEN TICKETS
+          </span>
+
+          <strong>
+            {stats.open_tickets}
+          </strong>
+        </div>
+
+        <div className="stat-card">
+          <span className="stat-label">
+            HIGH PRIORITY
+          </span>
+
+          <strong>
+            {stats.high_priority}
+          </strong>
+        </div>
+
+        <div className="stat-card">
+          <span className="stat-label">
+            RESOLVED
+          </span>
+
+          <strong>
+            {stats.resolved_tickets}
+          </strong>
+        </div>
+
+      </div>
+
+      {/* TICKETS BY CATEGORY */}
+
+      <div className="section-heading">
+
+        <div>
+          <p className="eyebrow">
+            TICKET ANALYTICS
+          </p>
+
+          <h3>
+            Tickets by category
+          </h3>
+        </div>
+
+      </div>
+
+      <div className="category-grid">
+
+        {Object.entries(stats.tickets_by_category || {}).map(
+          ([category, count]) => (
+            <div
+              className="category-card"
+              key={category}
+            >
+
+              <div>
+                <span className="category-name">
+                  {category}
+                </span>
+
+                <p>
+                  Support requests
+                </p>
+              </div>
+
+              <strong>
+                {count}
+              </strong>
+
+            </div>
+          )
+        )}
+
+        {Object.keys(stats.tickets_by_category || {}).length === 0 && (
+          <div className="category-empty">
+            No ticket data available yet.
+          </div>
+        )}
+
+      </div>
+
       {/* RECENT TICKETS */}
 
       <div className="section-heading tickets-heading">
@@ -214,9 +354,8 @@ function Overview({
 
               <span>
                 <i
-                  className={`status ${
-                    ticket.status?.toLowerCase()
-                  }`}
+                  className={`status ${ticket.status?.toLowerCase()
+                    }`}
                 ></i>
 
                 {ticket.status}
@@ -225,8 +364,8 @@ function Overview({
               <span className="muted">
                 {ticket.created_at
                   ? new Date(
-                      ticket.created_at
-                    ).toLocaleDateString()
+                    ticket.created_at
+                  ).toLocaleDateString()
                   : "-"}
               </span>
 
