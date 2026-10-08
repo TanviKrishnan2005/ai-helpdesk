@@ -7,7 +7,8 @@ from ..database import get_db
 from ..services.retriever import search_knowledge_base
 from ..services.ticket_service import (
     create_support_ticket,
-    classify_ticket
+    classify_ticket,
+    generate_ticket_subject
 )
 
 
@@ -31,10 +32,11 @@ def chat(
         if best_score < 0.35:
 
             category, priority = classify_ticket(message)
+            subject = generate_ticket_subject(message)
 
             ticket = create_support_ticket(
                 db=db,
-                subject=message[:80],
+                subject=subject,
                 description=message,
                 category=category,
                 priority=priority
@@ -60,10 +62,11 @@ def chat(
     else:
 
         category, priority = classify_ticket(message)
+        subject = generate_ticket_subject(message)
 
         ticket = create_support_ticket(
             db=db,
-            subject=message[:80],
+            subject=subject,
             description=message,
             category=category,
             priority=priority
