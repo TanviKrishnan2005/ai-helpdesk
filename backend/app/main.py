@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import Base, engine
 from .routes import tickets , chat
 
+from .routes import tickets, chat, dashboard
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -23,7 +25,7 @@ app.add_middleware(
 
 app.include_router(tickets.router)
 app.include_router(chat.router)
-
+app.include_router(dashboard.router)
 
 @app.get("/")
 def root():
