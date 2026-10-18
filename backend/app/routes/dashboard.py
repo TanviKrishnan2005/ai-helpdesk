@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from ..database import get_db
-from ..models import Ticket
+from ..models import Ticket, User
+from ..auth_utils import get_current_user
 
 
 router = APIRouter(
@@ -14,7 +15,8 @@ router = APIRouter(
 
 @router.get("/stats")
 def get_dashboard_stats(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     total_tickets = db.query(Ticket).count()
 
@@ -52,7 +54,7 @@ def get_dashboard_stats(
     for category, count in category_data:
         display_name = category_names.get(
             category,
-            category.title()
+            category.title() if category else "Uncategorized"
         )
 
         tickets_by_category[display_name] = count

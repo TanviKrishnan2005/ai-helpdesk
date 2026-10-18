@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Ticket
+from ..models import Ticket, User
+from ..auth_utils import get_current_user
+
 
 router = APIRouter(
     prefix="/tickets",
@@ -16,7 +18,8 @@ def create_ticket(
     description: str,
     category: str = "General",
     priority: str = "Medium",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     ticket = Ticket(
         subject=subject,
@@ -34,6 +37,7 @@ def create_ticket(
 
 @router.get("/")
 def get_tickets(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     return db.query(Ticket).all()
