@@ -1,6 +1,6 @@
+
 import hmac
 import hashlib
-import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import User
-from ..auth_utils import get_current_user
+from ..auth_utils import get_current_user, SECRET_KEY, ALGORITHM
 
 
 router = APIRouter(
@@ -19,28 +19,22 @@ router = APIRouter(
     tags=["Authentication"]
 )
 
-SECRET_KEY = os.getenv(
-    "JWT_SECRET_KEY",
-    "dev-only-change-this-secret-before-deployment"
-)
-
-ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 password_hash = PasswordHash.recommended()
 
 
 def hash_password(password: str) -> str:
-    """Hash new passwords using the recommended password-hashing algorithm."""
+    """Hash passwords using the recommended password-hashing algorithm."""
     return password_hash.hash(password)
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
-    """Support existing SHA-256 hashes and upgrade them after successful login."""
+    """Verify modern hashes and support legacy SHA-256 hashes."""
     if not stored_hash:
         return False
 
-    # Legacy SHA-256 hashes are 64 hexadecimal characters.
+    # Support legacy SHA-256 hashes during migration.
     if len(stored_hash) == 64:
         try:
             int(stored_hash, 16)
@@ -63,6 +57,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
 
 
 def create_access_token(user: User) -> str:
+    """Create a JWT access token for the authenticated user."""
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=ACCESS_TOKEN_EXPIRE_MINUTES
     )
@@ -151,7 +146,7 @@ def login(
             headers={"WWW-Authenticate": "Bearer"}
         )
 
-    # Upgrade a legacy SHA-256 hash after successful verification.
+    # Upgrade a legacy SHA-256 hash after successful login.
     if len(user.password) == 64:
         try:
             int(user.password, 16)

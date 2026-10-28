@@ -1,3 +1,4 @@
+
 Software Support
 
 If an application is not working correctly:
@@ -9,4 +10,9 @@ If an application is not working correctly:
 5. If the problem continues, reinstall the application if permitted.
 
 If the issue remains unresolved, contact the support team.
+
+IT Support Desk Hours
+
 The IT support desk operates from 10 AM to 5 PM on weekdays.
+The support desk is available Monday through Friday.
+For questions about IT support hours, the operating schedule is 10 AM to 5 PM on weekdays.
