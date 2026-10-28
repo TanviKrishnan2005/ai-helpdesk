@@ -1310,3 +1310,75 @@ textarea::placeholder {
   opacity: 1;
 }
 
+
+/* Retrieved knowledge-base sources */
+.message-sources {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 10px;
+  color: #536078;
+  font-size: 12px;
+}
+
+.message-sources summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.message-sources summary::-webkit-details-marker {
+  display: none;
+}
+
+.source-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid #e7e3db;
+  border-radius: 9px;
+  background: #fffdf9;
+  transition: background 0.2s ease;
+}
+
+.source-heading:hover {
+  background: #f3f0e9;
+}
+
+.source-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.source-item {
+  max-width: 440px;
+  padding: 12px;
+  border: 1px solid #e7e3db;
+  border-radius: 10px;
+  background: #fffdf9;
+}
+
+.source-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #192640;
+  overflow-wrap: anywhere;
+}
+
+.source-detail {
+  margin: 7px 0 0;
+  color: #788196;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.source-passage {
+  margin: 10px 0 0;
+  padding-top: 9px;
+  border-top: 1px solid #e7e3db;
+  color: #536078;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}

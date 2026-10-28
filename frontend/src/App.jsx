@@ -177,7 +177,7 @@ function App() {
       } else {
         setTicketMessage(
           error.response?.data?.detail ||
-            "Unable to create ticket. Please try again."
+          "Unable to create ticket. Please try again."
         );
       }
     } finally {
@@ -204,13 +204,19 @@ function App() {
         params: { message: userMessage },
       });
 
+
       setMessages((previous) => [
         ...previous,
         {
           type: "ai",
           text: response.data.response,
+          sources: response.data.sources ?? [],
+          resolved: response.data.resolved,
+          confidence: response.data.confidence,
+          ticket_id: response.data.ticket_id,
         },
       ]);
+
 
       // The AI may have created a support ticket.
       if (response.data.resolved === false) {
