@@ -1,6 +1,7 @@
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import TicketForm from "./TicketForm";
+
 
 function Tickets({
   tickets,
@@ -23,6 +24,11 @@ function Tickets({
   const [updatingTicketId, setUpdatingTicketId] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [priorityFilter, setPriorityFilter] = useState("All");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+
   const openTickets = tickets.filter(
     (ticket) => ticket.status?.toLowerCase() === "open"
   ).length;
@@ -34,6 +40,66 @@ function Tickets({
   const resolvedTickets = tickets.filter(
     (ticket) => ticket.status?.toLowerCase() === "resolved"
   ).length;
+
+  const categories = useMemo(
+    () =>
+      [...new Set(
+        tickets
+          .map((ticket) => ticket.category)
+          .filter(Boolean)
+      )].sort(),
+    [tickets]
+  );
+
+  const filteredTickets = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return tickets.filter((ticket) => {
+      const matchesSearch =
+        !query ||
+        String(ticket.id).includes(query) ||
+        ticket.subject?.toLowerCase().includes(query) ||
+        ticket.description?.toLowerCase().includes(query);
+
+      const matchesStatus =
+        statusFilter === "All" ||
+        ticket.status?.toLowerCase() === statusFilter.toLowerCase();
+
+      const matchesPriority =
+        priorityFilter === "All" ||
+        ticket.priority?.toLowerCase() === priorityFilter.toLowerCase();
+
+      const matchesCategory =
+        categoryFilter === "All" ||
+        ticket.category?.toLowerCase() === categoryFilter.toLowerCase();
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesPriority &&
+        matchesCategory
+      );
+    });
+  }, [
+    tickets,
+    searchQuery,
+    statusFilter,
+    priorityFilter,
+    categoryFilter,
+  ]);
+
+  const hasActiveFilters =
+    searchQuery.trim() !== "" ||
+    statusFilter !== "All" ||
+    priorityFilter !== "All" ||
+    categoryFilter !== "All";
+
+  function clearFilters() {
+    setSearchQuery("");
+    setStatusFilter("All");
+    setPriorityFilter("All");
+    setCategoryFilter("All");
+  }
 
   async function updateStatus(ticketId, newStatus) {
     const token = localStorage.getItem("helpdesk_token");
@@ -59,13 +125,14 @@ function Tickets({
         }
       );
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.detail || "Could not update ticket status.");
+        throw new Error(
+          data.detail || "Could not update ticket status."
+        );
       }
 
-      // Notify the parent component to reload the ticket list.
       window.dispatchEvent(new Event("tickets-updated"));
 
       setSelectedTicket((current) =>
@@ -74,9 +141,13 @@ function Tickets({
           : current
       );
 
-      setStatusMessage(`Ticket #${ticketId} updated to ${newStatus}.`);
+      setStatusMessage(
+        `Ticket #${ticketId} updated to ${newStatus}.`
+      );
     } catch (error) {
-      setStatusMessage(error.message || "Something went wrong.");
+      setStatusMessage(
+        error.message || "Something went wrong."
+      );
     } finally {
       setUpdatingTicketId(null);
     }
@@ -142,6 +213,84 @@ function Tickets({
         </p>
       )}
 
+      <div className="ticket-filters">
+        <div className="ticket-search">
+          <label htmlFor="ticket-search">Search tickets</label>
+          <input
+            id="ticket-search"
+            type="search"
+            placeholder="Search by ID, subject or description..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </div>
+
+        <div className="ticket-filter-row">
+          <div className="ticket-filter">
+            <label htmlFor="ticket-status-filter">Status</label>
+            <select
+              id="ticket-status-filter"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+            >
+              <option value="All">All statuses</option>
+              <option value="Open">Open</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Resolved">Resolved</option>
+            </select>
+          </div>
+
+          <div className="ticket-filter">
+            <label htmlFor="ticket-priority-filter">Priority</label>
+            <select
+              id="ticket-priority-filter"
+              value={priorityFilter}
+              onChange={(event) =>
+                setPriorityFilter(event.target.value)
+              }
+            >
+              <option value="All">All priorities</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
+            </select>
+          </div>
+
+          <div className="ticket-filter">
+            <label htmlFor="ticket-category-filter">Category</label>
+            <select
+              id="ticket-category-filter"
+              value={categoryFilter}
+              onChange={(event) =>
+                setCategoryFilter(event.target.value)
+              }
+            >
+              <option value="All">All categories</option>
+              {categories.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="ticket-clear-filters"
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        <p className="ticket-result-count" aria-live="polite">
+          Showing {filteredTickets.length} of {tickets.length} tickets
+        </p>
+      </div>
+
       <div className="full-ticket-list">
         {tickets.length === 0 ? (
           <div className="empty-chat">
@@ -149,8 +298,23 @@ function Tickets({
             <h2>No tickets yet</h2>
             <p>Your support requests will appear here.</p>
           </div>
+        ) : filteredTickets.length === 0 ? (
+          <div className="empty-chat">
+            <div className="large-ai-icon">⌕</div>
+            <h2>No matching tickets</h2>
+            <p>
+              Try changing your search or removing some filters.
+            </p>
+            <button
+              type="button"
+              className="ticket-details-button"
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          </div>
         ) : (
-          tickets.map((ticket) => (
+          filteredTickets.map((ticket) => (
             <div className="full-ticket" key={ticket.id}>
               <div className="full-ticket-id">#{ticket.id}</div>
 
@@ -166,9 +330,12 @@ function Tickets({
                 <button
                   type="button"
                   className="ticket-details-button"
+                  aria-expanded={selectedTicket?.id === ticket.id}
                   onClick={() =>
                     setSelectedTicket(
-                      selectedTicket?.id === ticket.id ? null : ticket
+                      selectedTicket?.id === ticket.id
+                        ? null
+                        : ticket
                     )
                   }
                 >
@@ -183,7 +350,8 @@ function Tickets({
                       <strong>Ticket ID:</strong> #{ticket.id}
                     </p>
                     <p>
-                      <strong>Description:</strong> {ticket.description}
+                      <strong>Description:</strong>{" "}
+                      {ticket.description}
                     </p>
                     <p>
                       <strong>Category:</strong> {ticket.category}
@@ -214,7 +382,9 @@ function Tickets({
                 <span>{ticket.status}</span>
 
                 <label>
-                  <span className="sr-only">Update ticket status</span>
+                  <span className="sr-only">
+                    Update ticket status
+                  </span>
                   <select
                     value={ticket.status || "Open"}
                     disabled={updatingTicketId === ticket.id}
