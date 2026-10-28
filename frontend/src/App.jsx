@@ -12,6 +12,7 @@ import Tickets from "./components/Tickets";
 
 const API_URL = "http://127.0.0.1:8000";
 const TOKEN_KEY = "helpdesk_token";
+const MAX_HISTORY_MESSAGES = 10;
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -177,7 +178,7 @@ function App() {
       } else {
         setTicketMessage(
           error.response?.data?.detail ||
-          "Unable to create ticket. Please try again."
+            "Unable to create ticket. Please try again."
         );
       }
     } finally {
@@ -185,11 +186,27 @@ function App() {
     }
   };
 
-  // Send a message to the AI support assistant.
+  // Send a message with recent conversation history.
   const sendMessage = async (text = message) => {
-    if (!text.trim() || loading) return;
+    if (typeof text !== "string" || !text.trim() || loading) {
+      return;
+    }
 
     const userMessage = text.trim();
+
+    // Capture previous messages before adding the current question.
+    const conversationHistory = messages
+      .slice(-MAX_HISTORY_MESSAGES)
+      .filter(
+        (msg) =>
+          (msg.type === "user" || msg.type === "ai") &&
+          typeof msg.text === "string" &&
+          msg.text.trim()
+      )
+      .map((msg) => ({
+        role: msg.type === "user" ? "user" : "assistant",
+        content: msg.text,
+      }));
 
     setMessages((previous) => [
       ...previous,
@@ -200,10 +217,17 @@ function App() {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/chat/`, null, {
-        params: { message: userMessage },
-      });
-
+      const response = await axios.post(
+        `${API_URL}/chat/`,
+        {
+          history: conversationHistory,
+        },
+        {
+          params: {
+            message: userMessage,
+          },
+        }
+      );
 
       setMessages((previous) => [
         ...previous,
@@ -217,8 +241,7 @@ function App() {
         },
       ]);
 
-
-      // The AI may have created a support ticket.
+      // Refresh tickets if the assistant escalated the issue.
       if (response.data.resolved === false) {
         await fetchTickets();
       }

@@ -174,3 +174,156 @@ def test_ticket_creation_failure_is_not_hidden(mock_create_ticket):
 
 def teardown_module():
     app.dependency_overrides.clear()
+
+@patch.object(chat_module.ollama, "chat")
+@patch.object(chat_module, "search_knowledge_base")
+def test_follow_up_uses_conversation_history(
+    mock_search,
+    mock_ollama,
+):
+    mock_search.return_value = [
+        {
+            "name": "password.txt",
+            "chunk_id": 1,
+            "content": (
+                "If you do not receive the reset email or cannot "
+                "complete the reset process, contact the support team."
+            ),
+            "score": 0.80,
+        }
+    ]
+
+    # First Ollama call rewrites the follow-up query.
+    # Second Ollama call generates the final answer.
+    mock_ollama.side_effect = [
+        {
+            "message": {
+                "content": (
+                    "What should I do if I do not receive "
+                    "the password reset email?"
+                )
+            }
+        },
+        {
+            "message": {
+                "content": (
+                    "If you don't receive the reset email, "
+                    "contact the support team."
+                )
+            }
+        },
+    ]
+
+    response = client.post(
+        "/chat/",
+        params={"message": "What if I don't receive it?"},
+        json={
+            "history": [
+                {
+                    "role": "user",
+                    "content": "How do I reset my password?",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Follow the password-reset instructions.",
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["resolved"] is True
+    assert "contact the support team" in (
+        response.json()["response"].lower()
+    )
+    mock_search.assert_called_once()
+    assert mock_ollama.call_count == 2
+
+
+@patch.object(chat_module.ollama, "chat")
+@patch.object(chat_module, "search_knowledge_base")
+def test_unsupported_password_email_advice_is_sanitized(
+    mock_search,
+    mock_ollama,
+):
+    mock_search.return_value = [
+        {
+            "name": "password.txt",
+            "chunk_id": 1,
+            "content": (
+                "If you do not receive the reset email, "
+                "contact the support team."
+            ),
+            "score": 0.80,
+        }
+    ]
+
+    mock_ollama.side_effect = [
+        {
+            "message": {
+                "content": (
+                    "What should I do if I do not receive "
+                    "the password reset email?"
+                )
+            }
+        },
+        {
+            "message": {
+                "content": (
+                    "Check your spam or junk mail folders. "
+                    "If that fails, contact support."
+                )
+            }
+        },
+    ]
+
+    response = client.post(
+        "/chat/",
+        params={"message": "What if I don't receive it?"},
+        json={
+            "history": [
+                {
+                    "role": "user",
+                    "content": "How do I reset my password?",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+
+    answer = response.json()["response"].lower()
+
+    assert "contact the support team" in answer
+    assert "spam" not in answer
+
+
+@patch.object(chat_module, "search_knowledge_base", return_value=[])
+@patch.object(chat_module, "escalate_to_ticket")
+def test_follow_up_without_relevant_knowledge_escalates(
+    mock_escalate,
+    mock_search,
+):
+    mock_escalate.return_value = {
+        "response": "Ticket created",
+        "resolved": False,
+        "confidence": 0,
+        "ticket_id": 456,
+    }
+
+    response = client.post(
+        "/chat/",
+        params={"message": "What if I don't receive it?"},
+        json={
+            "history": [
+                {
+                    "role": "user",
+                    "content": "How do I reset my password?",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["resolved"] is False
+    mock_escalate.assert_called_once()
