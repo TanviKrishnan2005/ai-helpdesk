@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Ticket, User
-from ..auth_utils import get_current_user
+from ..auth_utils import get_current_user, require_role
 
 
 router = APIRouter(
@@ -42,12 +42,13 @@ def get_tickets(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return (
-        db.query(Ticket)
-        .filter(Ticket.user_id == current_user.id)
-        .order_by(Ticket.created_at.desc())
-        .all()
-    )
+    query = db.query(Ticket)
+
+    # Admins can see all tickets; users can see only their own.
+    if (current_user.role or "").lower() != "admin":
+        query = query.filter(Ticket.user_id == current_user.id)
+
+    return query.order_by(Ticket.created_at.desc()).all()
 
 
 @router.get("/{ticket_id}")
@@ -56,14 +57,12 @@ def get_ticket(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    ticket = (
-        db.query(Ticket)
-        .filter(
-            Ticket.id == ticket_id,
-            Ticket.user_id == current_user.id
-        )
-        .first()
-    )
+    query = db.query(Ticket).filter(Ticket.id == ticket_id)
+
+    if (current_user.role or "").lower() != "admin":
+        query = query.filter(Ticket.user_id == current_user.id)
+
+    ticket = query.first()
 
     if not ticket:
         raise HTTPException(
@@ -89,14 +88,13 @@ def update_ticket_status(
             detail=f"Status must be one of: {', '.join(allowed_statuses)}"
         )
 
-    ticket = (
-        db.query(Ticket)
-        .filter(
-            Ticket.id == ticket_id,
-            Ticket.user_id == current_user.id
-        )
-        .first()
-    )
+    # Only admins can update tickets belonging to other users.
+    query = db.query(Ticket).filter(Ticket.id == ticket_id)
+
+    if (current_user.role or "").lower() != "admin":
+        query = query.filter(Ticket.user_id == current_user.id)
+
+    ticket = query.first()
 
     if not ticket:
         raise HTTPException(

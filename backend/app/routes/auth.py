@@ -1,11 +1,13 @@
+import hmac
 import hashlib
 import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
 from jose import jwt
+from pwdlib import PasswordHash
+from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import User
@@ -25,14 +27,42 @@ SECRET_KEY = os.getenv(
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-
-def hash_password(password):
-    return hashlib.sha256(
-        password.encode("utf-8")
-    ).hexdigest()
+password_hash = PasswordHash.recommended()
 
 
-def create_access_token(user):
+def hash_password(password: str) -> str:
+    """Hash new passwords using the recommended password-hashing algorithm."""
+    return password_hash.hash(password)
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Support existing SHA-256 hashes and upgrade them after successful login."""
+    if not stored_hash:
+        return False
+
+    # Legacy SHA-256 hashes are 64 hexadecimal characters.
+    if len(stored_hash) == 64:
+        try:
+            int(stored_hash, 16)
+        except ValueError:
+            pass
+        else:
+            legacy_hash = hashlib.sha256(
+                password.encode("utf-8")
+            ).hexdigest()
+
+            return hmac.compare_digest(
+                legacy_hash,
+                stored_hash.lower()
+            )
+
+    try:
+        return password_hash.verify(password, stored_hash)
+    except (ValueError, TypeError):
+        return False
+
+
+def create_access_token(user: User) -> str:
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=ACCESS_TOKEN_EXPIRE_MINUTES
     )
@@ -55,16 +85,8 @@ def register(
     name: str,
     email: str,
     password: str,
-    role: str = "user",
     db: Session = Depends(get_db)
 ):
-    # Only allow public registration for regular users.
-    if role != "user":
-        raise HTTPException(
-            status_code=403,
-            detail="Public registration is only available for users"
-        )
-
     name = name.strip()
     email = email.strip().lower()
 
@@ -115,7 +137,6 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    # Swagger sends the email through the username field.
     email = form_data.username.strip().lower()
     password = form_data.password
 
@@ -123,12 +144,23 @@ def login(
         User.email == email
     ).first()
 
-    if not user or user.password != hash_password(password):
+    if not user or not verify_password(password, user.password):
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password",
             headers={"WWW-Authenticate": "Bearer"}
         )
+
+    # Upgrade a legacy SHA-256 hash after successful verification.
+    if len(user.password) == 64:
+        try:
+            int(user.password, 16)
+        except ValueError:
+            pass
+        else:
+            user.password = hash_password(password)
+            db.commit()
+            db.refresh(user)
 
     access_token = create_access_token(user)
 

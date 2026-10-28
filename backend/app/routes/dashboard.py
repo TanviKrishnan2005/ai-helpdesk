@@ -19,22 +19,25 @@ def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Start with tickets belonging to the logged-in user.
-    user_tickets = db.query(Ticket).filter(
-        Ticket.user_id == current_user.id
-    )
+    # Admins see all tickets; regular users see only their own.
+    tickets_query = db.query(Ticket)
 
-    total_tickets = user_tickets.count()
+    if (current_user.role or "").lower() != "admin":
+        tickets_query = tickets_query.filter(
+            Ticket.user_id == current_user.id
+        )
 
-    open_tickets = user_tickets.filter(
+    total_tickets = tickets_query.count()
+
+    open_tickets = tickets_query.filter(
         Ticket.status == "Open"
     ).count()
 
-    high_priority = user_tickets.filter(
+    high_priority = tickets_query.filter(
         Ticket.priority == "High"
     ).count()
 
-    resolved_tickets = user_tickets.filter(
+    resolved_tickets = tickets_query.filter(
         Ticket.status == "Resolved"
     ).count()
 
@@ -43,7 +46,15 @@ def get_dashboard_stats(
             func.lower(Ticket.category),
             func.count(Ticket.id)
         )
-        .filter(Ticket.user_id == current_user.id)
+    )
+
+    if (current_user.role or "").lower() != "admin":
+        category_data = category_data.filter(
+            Ticket.user_id == current_user.id
+        )
+
+    category_data = (
+        category_data
         .group_by(func.lower(Ticket.category))
         .all()
     )

@@ -1,3 +1,4 @@
+
 import os
 
 from fastapi import Depends, HTTPException
@@ -9,15 +10,20 @@ from .database import get_db
 from .models import User
 
 
-SECRET_KEY = os.getenv(
-    "JWT_SECRET_KEY",
-    "dev-only-change-this-secret-before-deployment"
-)
-
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 
+if not SECRET_KEY:
+    if os.getenv("APP_ENV", "development").lower() == "production":
+        raise RuntimeError(
+            "JWT_SECRET_KEY must be configured in production."
+        )
+
+    SECRET_KEY = "dev-only-change-this-secret-before-deployment"
+
+
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="auth/login",
+    tokenUrl="/auth/login",
     scheme_name="OAuth2PasswordBearer"
 )
 
@@ -25,7 +31,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
-):
+) -> User:
     credentials_exception = HTTPException(
         status_code=401,
         detail="Invalid or expired authentication token",
@@ -59,11 +65,18 @@ def get_current_user(
     return user
 
 
-def require_role(*allowed_roles):
+def require_role(*allowed_roles: str):
+    normalized_roles = {
+        role.strip().lower()
+        for role in allowed_roles
+    }
+
     def role_checker(
         current_user: User = Depends(get_current_user)
-    ):
-        if current_user.role not in allowed_roles:
+    ) -> User:
+        current_role = (current_user.role or "").strip().lower()
+
+        if current_role not in normalized_roles:
             raise HTTPException(
                 status_code=403,
                 detail="You do not have permission to access this resource"
