@@ -9,3 +9,4 @@ If an application is not working correctly:
 5. If the problem continues, reinstall the application if permitted.
 
 If the issue remains unresolved, contact the support team.
+The IT support desk operates from 10 AM to 5 PM on weekdays.

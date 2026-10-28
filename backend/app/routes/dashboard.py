@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -18,17 +19,22 @@ def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    total_tickets = db.query(Ticket).count()
+    # Start with tickets belonging to the logged-in user.
+    user_tickets = db.query(Ticket).filter(
+        Ticket.user_id == current_user.id
+    )
 
-    open_tickets = db.query(Ticket).filter(
+    total_tickets = user_tickets.count()
+
+    open_tickets = user_tickets.filter(
         Ticket.status == "Open"
     ).count()
 
-    high_priority = db.query(Ticket).filter(
+    high_priority = user_tickets.filter(
         Ticket.priority == "High"
     ).count()
 
-    resolved_tickets = db.query(Ticket).filter(
+    resolved_tickets = user_tickets.filter(
         Ticket.status == "Resolved"
     ).count()
 
@@ -37,6 +43,7 @@ def get_dashboard_stats(
             func.lower(Ticket.category),
             func.count(Ticket.id)
         )
+        .filter(Ticket.user_id == current_user.id)
         .group_by(func.lower(Ticket.category))
         .all()
     )

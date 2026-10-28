@@ -1,3 +1,4 @@
+
 import ollama
 
 from sqlalchemy.orm import Session
@@ -82,6 +83,7 @@ def create_support_ticket(
     db: Session,
     subject: str,
     description: str,
+    user_id: int,
     category: str = "General",
     priority: str = "Medium"
 ):
@@ -89,7 +91,8 @@ def create_support_ticket(
         subject=subject,
         description=description,
         category=category,
-        priority=priority
+        priority=priority,
+        user_id=user_id
     )
 
     db.add(ticket)

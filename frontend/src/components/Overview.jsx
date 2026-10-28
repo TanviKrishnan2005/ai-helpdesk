@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
+function getFormattedDate() {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).toUpperCase();
+}
+
 function Overview({
+  currentUser,
   message,
   setMessage,
   sendMessage,
@@ -59,11 +68,11 @@ function Overview({
 
         <div>
           <p className="eyebrow">
-            MONDAY, SEPTEMBER 21
+            {getFormattedDate()}
           </p>
 
           <h1>
-            Good evening, Tanvi.
+            Good evening, {currentUser?.name || "there"}.
           </h1>
 
           <p className="page-subtitle">
