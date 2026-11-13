@@ -5,5 +5,4 @@ If you are unable to access your account:
 1. Verify that you are using the correct username or email address.
 2. Check that your password is entered correctly.
 3. Use the password reset option if you have forgotten your password.
-4. Make sure your account is not locked.
-5. If you still cannot access your account, contact the support team.
+4. If your account is locked or you still cannot access it, contact the support team.

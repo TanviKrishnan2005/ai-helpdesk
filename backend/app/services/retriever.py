@@ -151,3 +151,33 @@ def search_knowledge_base(query, top_k=3):
         })
 
     return results
+def print_retrieval_results(query, results):
+    """Display retrieved chunks and their similarity scores."""
+
+    print("\n" + "=" * 60)
+    print(f"QUERY: {query}")
+    print("=" * 60)
+
+    if not results:
+        print("No documents retrieved.")
+        return
+
+    for result in results:
+        print(f"\nDocument: {result['name']}")
+        print(f"Chunk: {result['chunk_id']}")
+        print(f"Similarity Score: {result['score']:.4f}")
+
+        retrieval_pass = result["score"] >= 0.25
+        source_pass = result["score"] >= 0.35
+
+        print(
+            f"Retrieval Threshold (0.25): "
+            f"{'PASS' if retrieval_pass else 'FAIL'}"
+        )
+
+        print(
+            f"Source Threshold (0.35): "
+            f"{'PASS' if source_pass else 'FAIL'}"
+        )
+
+    print("=" * 60)
