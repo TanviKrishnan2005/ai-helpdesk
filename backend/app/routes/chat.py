@@ -1,9 +1,11 @@
 
 import logging
+import os
 from typing import Literal
 
-import ollama
-from fastapi import APIRouter, Depends
+from dotenv import load_dotenv
+from google import genai
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -17,11 +19,16 @@ from ..services.ticket_service import (
     generate_ticket_subject,
 )
 
+load_dotenv()
 
-router = APIRouter(
-    prefix="/chat",
-    tags=["Chat"],
-)
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key:
+    raise RuntimeError("GEMINI_API_KEY is not configured.")
+
+client = genai.Client(api_key=api_key)
+GEMINI_MODEL = "gemini-3.5-flash"
+
+router = APIRouter(prefix="/chat", tags=["Chat"])
 
 MIN_RETRIEVAL_SCORE = 0.25
 MIN_SOURCE_SCORE = 0.35
@@ -42,7 +49,6 @@ class ChatRequest(BaseModel):
 
 
 def escalate_to_ticket(db, message, user_id, confidence):
-    """Create a ticket when the assistant cannot safely answer."""
     category, priority = classify_ticket(message)
     subject = generate_ticket_subject(message)
 
@@ -68,7 +74,6 @@ def escalate_to_ticket(db, message, user_id, confidence):
 
 
 def prepare_history(history):
-    """Limit the conversation context sent to the model."""
     prepared = []
     total_chars = 0
 
@@ -79,7 +84,6 @@ def prepare_history(history):
             continue
 
         remaining = MAX_HISTORY_CHARS - total_chars
-
         if remaining <= 0:
             break
 
@@ -97,45 +101,51 @@ def prepare_history(history):
 
 
 def rewrite_follow_up(message, history):
-    """Rewrite contextual follow-ups as standalone search queries."""
+    """Only rewrite contextual follow-ups when history exists."""
     if not history:
         return message
 
+    # Simple greetings and short standalone messages don't need rewriting.
+    simple_messages = {
+        "hi", "hello", "hey", "thanks", "thank you",
+        "ok", "okay", "bye", "good morning", "good evening",
+    }
+
+    if message.lower().strip() in simple_messages:
+        return message
+
     try:
-        response = ollama.chat(
-            model="qwen2.5:3b",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Rewrite the latest user message as a standalone "
-                        "customer-support search query. Use conversation "
-                        "history only to resolve references such as 'it' "
-                        "or 'that'. Preserve the user's intent. Return "
-                        "only the rewritten query. Do not answer it."
-                    ),
-                },
-                *history,
-                {
-                    "role": "user",
-                    "content": message,
-                },
-            ],
+        conversation = "\n".join(
+            f"{item['role']}: {item['content']}"
+            for item in history
         )
 
-        rewritten = response["message"]["content"].strip()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=(
+                "Rewrite the latest user message as a standalone "
+                "customer-support search query. Preserve intent. "
+                "Return only the rewritten query.\n\n"
+                f"Conversation history:\n{conversation}\n\n"
+                f"Latest user message: {message}"
+            ),
+        )
+
+        rewritten = (response.text or "").strip()
 
         if rewritten:
             return rewritten[:500]
 
     except Exception:
-        logging.exception("Follow-up query rewriting failed")
+        logging.warning(
+            "Follow-up rewriting failed. Using original message.",
+            exc_info=True,
+        )
 
     return message
 
 
 def is_password_email_followup(message):
-    """Identify questions about a missing password-reset email."""
     text = message.lower()
 
     refers_to_email = "email" in text or "it" in text
@@ -167,7 +177,6 @@ def is_password_email_followup(message):
 
 
 def sanitize_answer(answer, message):
-    """Apply a targeted safeguard for unsupported email advice."""
     answer_lower = answer.lower()
 
     unsupported_password_advice = [
@@ -214,7 +223,7 @@ def chat(
     message = message.strip()
     history = prepare_history(payload.history if payload else [])
 
-    # Step 1: Interpret the current question using recent context.
+    # Step 1: Interpret the current question.
     retrieval_query = rewrite_follow_up(message, history)
 
     # Step 2: Retrieve knowledge-base passages.
@@ -226,111 +235,106 @@ def chat(
 
     if not results:
         return escalate_to_ticket(
-            db=db,
-            message=message,
-            user_id=current_user.id,
-            confidence=0,
+            db, message, current_user.id, 0
         )
 
     best_score = float(results[0]["score"])
 
     if best_score < MIN_RETRIEVAL_SCORE:
         return escalate_to_ticket(
-            db=db,
-            message=message,
-            user_id=current_user.id,
-            confidence=best_score,
+            db, message, current_user.id, best_score
         )
 
-    # Step 3: Keep only sufficiently relevant passages.
     relevant_results = [
         result
         for result in results
         if float(result["score"]) >= MIN_SOURCE_SCORE
     ]
-    
 
     if not relevant_results:
         return escalate_to_ticket(
-            db=db,
-            message=message,
-            user_id=current_user.id,
-            confidence=best_score,
+            db, message, current_user.id, best_score
         )
 
     context = "\n\n---\n\n".join(
-        (
-            f"Source file: {result['name']}\n"
-            f"Passage:\n{result['content']}"
-        )
+        f"Source file: {result['name']}\n"
+        f"Passage:\n{result['content']}"
         for result in relevant_results
     )
 
-    # Step 4: Generate an answer grounded in the retrieved passages.
+    # Step 3: Generate a grounded answer.
     system_prompt = """
-You are a precise customer-support assistant.
+You are a precise and helpful customer-support assistant.
 
 RULES:
-1. Answer only the user's current question.
+1. Answer the user's latest question using the conversation history for context.
 2. Use only the supplied knowledge-base passages.
-3. Include only steps directly relevant to the user's issue.
-4. Do not combine information from unrelated topics.
-5. Do not invent policies or troubleshooting steps.
-6. If information is insufficient, recommend contacting the support team.
-7. Keep answers concise and avoid repeating instructions.
-8. Never mention source filenames.
-9. Never claim an action was completed unless a tool performed it.
-10. Do not include conditional advice that contradicts the user's stated problem.
-11. Never assume the user has already tried troubleshooting steps unless they explicitly say so.
-12. If the user explicitly says their account is locked, tell them to contact the support team. Do not give general login troubleshooting steps.
-13. Never assume an account is locked because a password reset failed. Only discuss account lockout when the user explicitly mentions it.
-Before answering, identify the user's issue and select only relevant instructions.
+3. Carefully read the conversation history to identify troubleshooting
+   steps the user has already attempted.
+4. Never recommend repeating a step the user has explicitly tried.
+5. Suggest the next relevant, untried troubleshooting step.
+6. If the user reports that a previous step did not work,
+   acknowledge it briefly and continue with the next step.
+7. Include only steps directly relevant to the user's issue.
+8. Do not invent troubleshooting steps, policies, or procedures.
+9. If the knowledge base does not contain another useful step,
+   recommend contacting the support team.
+10. Keep answers concise, clear, and conversational.
+11. Never mention source filenames.
+12. Never claim an action was completed unless a tool performed it.
+13. Never assume the user has tried a step unless they said so.
+14. If the user explicitly says their account is locked,
+    tell them to contact support.
+15. Never assume an account is locked because a password reset failed.
 """
 
-    model_messages = [
-        {
-            "role": "system",
-            "content": system_prompt,
-        },
-        {
-            "role": "user",
-            "content": (
-                f"Conversation context:\n"
-                f"{format_history(history)}\n\n"
-                f"Current user question:\n{message}\n\n"
-                f"Retrieved knowledge-base passages:\n{context}\n\n"
-                "Answer the current question using only the passages. "
-                "If a requested detail is not covered, say so and "
-                "provide any supported next step."
-            ),
-        },
-    ]
+
+    prompt = (
+        f"{system_prompt}\n\n"
+        f"Conversation context:\n{format_history(history)}\n\n"
+        f"Current user question:\n{message}\n\n"
+        f"Retrieved knowledge-base passages:\n{context}\n\n"
+        "Answer using only the supplied passages."
+    )
 
     try:
-        response = ollama.chat(
-            model="qwen2.5:3b",
-            messages=model_messages,
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
         )
 
-        answer = response["message"]["content"].strip()
+        answer = (response.text or "").strip()
 
         if not answer:
             raise ValueError("The AI returned an empty answer.")
 
     except Exception:
-        logging.exception("Ollama response generation failed")
+        logging.exception("Gemini response generation failed")
 
-        return escalate_to_ticket(
-            db=db,
-            message=message,
-            user_id=current_user.id,
-            confidence=best_score,
+        # Do not create a ticket just because Gemini is temporarily down.
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "The AI assistant is temporarily unavailable. "
+                "Please try again in a moment."
+            ),
         )
 
-    # Step 5: Apply the targeted safeguard.
     answer = sanitize_answer(answer, message)
+    
+    escalation_phrases = [
+    "contact the support team",
+    "contact support",
+    "reach out to the support team",
+    "contact your support team",
+    ]
+    
+    if any(phrase in answer.lower() for phrase in escalation_phrases):
+        return escalate_to_ticket(
+            db, message, current_user.id, best_score
+            )
 
-    # Escalate when the model explicitly indicates it cannot answer.
+
     uncertain_phrases = [
         "the available information is insufficient",
         "the passages do not contain enough information",
@@ -344,13 +348,9 @@ Before answering, identify the user's issue and select only relevant instruction
 
     if any(phrase in answer.lower() for phrase in uncertain_phrases):
         return escalate_to_ticket(
-            db=db,
-            message=message,
-            user_id=current_user.id,
-            confidence=best_score,
+            db, message, current_user.id, best_score
         )
 
-    # Step 6: Return source metadata from actual retrieved passages.
     sources = [
         {
             "file": result["name"],
@@ -371,7 +371,6 @@ Before answering, identify the user's issue and select only relevant instruction
 
 
 def format_history(history):
-    """Format history to help the model interpret follow-ups."""
     if not history:
         return "No previous conversation."
 

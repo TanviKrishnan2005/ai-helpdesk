@@ -1,9 +1,20 @@
 
-import ollama
+import logging
+import os
 
+from dotenv import load_dotenv
+from google import genai
 from sqlalchemy.orm import Session
 
 from ..models import Ticket
+
+load_dotenv()
+
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY")
+)
+
+GEMINI_MODEL = "gemini-3.5-flash"
 
 
 def classify_ticket(message):
@@ -49,32 +60,23 @@ def classify_ticket(message):
 
 def generate_ticket_subject(message):
     try:
-        response = ollama.chat(
-            model="qwen2.5:3b",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Create a short support ticket subject from "
-                        "the user's problem. "
-                        "Return only the subject, with no quotes. "
-                        "Keep it under 8 words."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": message
-                }
-            ]
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=(
+                "Create a short support ticket subject from "
+                "the user's problem. Return only the subject, "
+                "with no quotes. Keep it under 8 words.\n\n"
+                f"User problem: {message}"
+            ),
         )
 
-        subject = response["message"]["content"].strip()
+        subject = (response.text or "").strip()
 
         if subject:
             return subject[:100]
 
     except Exception:
-        pass
+        logging.exception("Gemini ticket subject generation failed")
 
     return message[:80]
 
@@ -85,14 +87,14 @@ def create_support_ticket(
     description: str,
     user_id: int,
     category: str = "General",
-    priority: str = "Medium"
+    priority: str = "Medium",
 ):
     ticket = Ticket(
         subject=subject,
         description=description,
         category=category,
         priority=priority,
-        user_id=user_id
+        user_id=user_id,
     )
 
     db.add(ticket)

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .database import Base, engine
 from .routes import tickets, chat, dashboard, auth ,conversations
-
+from app import models
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
