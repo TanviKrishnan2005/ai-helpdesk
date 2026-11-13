@@ -29,7 +29,7 @@ function Overview({
     const fetchStats = async () => {
       try {
         const response = await axios.get(
-          "http://127.0.0.1:8000/dashboard/stats"
+          "https://ai-helpdesk-0lnj.onrender.com/dashboard/stats"
         );
 
         setStats(response.data);
@@ -333,8 +333,8 @@ function Overview({
               <span className="muted">
                 {ticket.created_at
                   ? new Date(
-                      ticket.created_at
-                    ).toLocaleDateString()
+                    ticket.created_at
+                  ).toLocaleDateString()
                   : "-"}
               </span>
             </div>

@@ -116,7 +116,7 @@ function Tickets({
       const params = new URLSearchParams({ status: newStatus });
 
       const response = await fetch(
-        `http://127.0.0.1:8000/tickets/${ticketId}/status?${params}`,
+        `https://ai-helpdesk-0lnj.onrender.com/tickets/${ticketId}/status?${params}`,
         {
           method: "PATCH",
           headers: {

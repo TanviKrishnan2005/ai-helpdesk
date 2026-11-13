@@ -10,7 +10,7 @@ import Overview from "./components/Overview";
 import Assistant from "./components/Assistant";
 import Tickets from "./components/Tickets";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://ai-helpdesk-0lnj.onrender.com";
 const TOKEN_KEY = "helpdesk_token";
 const MAX_HISTORY_MESSAGES = 10;
 
