@@ -280,6 +280,7 @@ function App() {
         activePage={activePage}
         setActivePage={setActivePage}
         ticketCount={tickets.length}
+        currentUser={currentUser}
       />
 
       <main className="main-content">

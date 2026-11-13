@@ -1,4 +1,14 @@
-function Sidebar({ activePage, setActivePage, ticketCount }) {
+
+function Sidebar({
+  activePage,
+  setActivePage,
+  ticketCount,
+  currentUser,
+}) {
+  const userName = currentUser?.name || "User";
+  const userInitial = userName.charAt(0).toUpperCase();
+  const userRole = currentUser?.role || "User";
+
   return (
     <aside className="sidebar">
 
@@ -68,11 +78,13 @@ function Sidebar({ activePage, setActivePage, ticketCount }) {
         </div>
 
         <div className="profile">
-          <div className="avatar">T</div>
+          <div className="avatar">
+            {userInitial}
+          </div>
 
           <div>
-            <strong>Tanvi</strong>
-            <small>Student</small>
+            <strong>{userName}</strong>
+            <small>{userRole}</small>
           </div>
 
           <span className="dots">•••</span>

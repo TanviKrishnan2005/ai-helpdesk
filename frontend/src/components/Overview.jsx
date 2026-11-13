@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import axios from "axios";
 
@@ -33,15 +34,20 @@ function Overview({
 
         setStats(response.data);
       } catch (error) {
-        console.error(
-          "Failed to fetch dashboard stats:",
-          error
-        );
+        console.error("Failed to fetch dashboard stats:", error);
       }
     };
 
     fetchStats();
   }, [tickets]);
+
+  // Navigate to Assistant and send the query
+  const handleAskAI = () => {
+    if (!message.trim()) return;
+
+    setActivePage("assistant");
+    sendMessage();
+  };
 
   const quickQuestions = [
     {
@@ -65,7 +71,6 @@ function Overview({
     <section className="page">
 
       <div className="welcome-row">
-
         <div>
           <p className="eyebrow">
             {getFormattedDate()}
@@ -87,15 +92,12 @@ function Overview({
           <span>+</span>
           Ask for help
         </button>
-
       </div>
 
       {/* AI HERO */}
 
       <div className="support-card">
-
         <div className="support-copy">
-
           <div className="ai-badge">
             <span>✦</span>
             AI SUPPORT
@@ -111,11 +113,9 @@ function Overview({
             Our support assistant searches the help center
             and guides you through the next step.
           </p>
-
         </div>
 
         <div className="question-box">
-
           <textarea
             placeholder="Tell us what's going wrong..."
             value={message}
@@ -123,30 +123,25 @@ function Overview({
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                sendMessage();
+                handleAskAI();
               }
             }}
           />
 
           <div className="question-footer">
-
             <span>Press Enter to send</span>
 
-            <button onClick={() => sendMessage()}>
+            <button onClick={handleAskAI}>
               Ask AI
               <span>→</span>
             </button>
-
           </div>
-
         </div>
-
       </div>
 
       {/* QUICK ACTIONS */}
 
       <div className="section-heading">
-
         <div>
           <p className="eyebrow">
             QUICK START
@@ -156,21 +151,19 @@ function Overview({
             What do you need help with?
           </h3>
         </div>
-
       </div>
 
       <div className="quick-grid">
-
         {quickQuestions.map((item) => (
           <button
             className="quick-card"
             key={item.title}
             onClick={() => {
+              setMessage(item.text);
               setActivePage("assistant");
               sendMessage(item.text);
             }}
           >
-
             <div className="quick-icon">
               {item.icon}
             </div>
@@ -181,16 +174,13 @@ function Overview({
             </div>
 
             <span className="arrow">↗</span>
-
           </button>
         ))}
-
       </div>
 
       {/* DASHBOARD STATS */}
 
       <div className="section-heading">
-
         <div>
           <p className="eyebrow">
             SUPPORT OVERVIEW
@@ -200,19 +190,15 @@ function Overview({
             Helpdesk at a glance
           </h3>
         </div>
-
       </div>
 
       <div className="stats-grid">
-
         <div className="stat-card">
           <span className="stat-label">
             TOTAL TICKETS
           </span>
 
-          <strong>
-            {stats.total_tickets}
-          </strong>
+          <strong>{stats.total_tickets}</strong>
         </div>
 
         <div className="stat-card">
@@ -220,9 +206,7 @@ function Overview({
             OPEN TICKETS
           </span>
 
-          <strong>
-            {stats.open_tickets}
-          </strong>
+          <strong>{stats.open_tickets}</strong>
         </div>
 
         <div className="stat-card">
@@ -230,9 +214,7 @@ function Overview({
             HIGH PRIORITY
           </span>
 
-          <strong>
-            {stats.high_priority}
-          </strong>
+          <strong>{stats.high_priority}</strong>
         </div>
 
         <div className="stat-card">
@@ -240,17 +222,13 @@ function Overview({
             RESOLVED
           </span>
 
-          <strong>
-            {stats.resolved_tickets}
-          </strong>
+          <strong>{stats.resolved_tickets}</strong>
         </div>
-
       </div>
 
       {/* TICKETS BY CATEGORY */}
 
       <div className="section-heading">
-
         <div>
           <p className="eyebrow">
             TICKET ANALYTICS
@@ -260,32 +238,24 @@ function Overview({
             Tickets by category
           </h3>
         </div>
-
       </div>
 
       <div className="category-grid">
-
         {Object.entries(stats.tickets_by_category || {}).map(
           ([category, count]) => (
             <div
               className="category-card"
               key={category}
             >
-
               <div>
                 <span className="category-name">
                   {category}
                 </span>
 
-                <p>
-                  Support requests
-                </p>
+                <p>Support requests</p>
               </div>
 
-              <strong>
-                {count}
-              </strong>
-
+              <strong>{count}</strong>
             </div>
           )
         )}
@@ -295,13 +265,11 @@ function Overview({
             No ticket data available yet.
           </div>
         )}
-
       </div>
 
       {/* RECENT TICKETS */}
 
       <div className="section-heading tickets-heading">
-
         <div>
           <p className="eyebrow">
             YOUR ACTIVITY
@@ -318,11 +286,9 @@ function Overview({
         >
           View all →
         </button>
-
       </div>
 
       <div className="ticket-table">
-
         <div className="ticket-row ticket-head">
           <span>TICKET</span>
           <span>SUBJECT</span>
@@ -332,7 +298,6 @@ function Overview({
 
         {tickets.length === 0 ? (
           <div className="ticket-row">
-
             <span>-</span>
 
             <span className="ticket-subject">
@@ -341,10 +306,7 @@ function Overview({
 
             <span>-</span>
 
-            <span className="muted">
-              -
-            </span>
-
+            <span className="muted">-</span>
           </div>
         ) : (
           tickets.slice(0, 3).map((ticket) => (
@@ -352,7 +314,6 @@ function Overview({
               className="ticket-row"
               key={ticket.id}
             >
-
               <span className="ticket-id">
                 #{ticket.id}
               </span>
@@ -363,8 +324,7 @@ function Overview({
 
               <span>
                 <i
-                  className={`status ${ticket.status?.toLowerCase()
-                    }`}
+                  className={`status ${ticket.status?.toLowerCase()}`}
                 ></i>
 
                 {ticket.status}
@@ -373,15 +333,13 @@ function Overview({
               <span className="muted">
                 {ticket.created_at
                   ? new Date(
-                    ticket.created_at
-                  ).toLocaleDateString()
+                      ticket.created_at
+                    ).toLocaleDateString()
                   : "-"}
               </span>
-
             </div>
           ))
         )}
-
       </div>
 
     </section>
