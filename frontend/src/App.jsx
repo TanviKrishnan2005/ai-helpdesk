@@ -20,6 +20,9 @@ function App() {
 
   const [activePage, setActivePage] = useState("overview");
 
+  // Responsive sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -137,6 +140,7 @@ function App() {
     setPriority("Medium");
 
     setActivePage("overview");
+    setSidebarOpen(false);
   };
 
   // Fetch tickets belonging to the authenticated user.
@@ -439,14 +443,25 @@ function App() {
     <div className="app-shell">
       <Sidebar
         activePage={activePage}
-        setActivePage={setActivePage}
+        setActivePage={(page) => {
+          setActivePage(page);
+          setSidebarOpen(false);
+        }}
         ticketCount={tickets.length}
         currentUser={currentUser}
         conversations={conversations}
         activeConversationId={activeConversationId}
-        createConversation={createConversation}
-        openConversation={openConversation}
+        createConversation={async () => {
+          await createConversation();
+          setSidebarOpen(false);
+        }}
+        openConversation={async (id) => {
+          await openConversation(id);
+          setSidebarOpen(false);
+        }}
         deleteConversation={deleteConversation}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
       />
 
       <main className="main-content">
@@ -454,6 +469,7 @@ function App() {
           activePage={activePage}
           currentUser={currentUser}
           onLogout={handleLogout}
+          onMenuClick={() => setSidebarOpen((previous) => !previous)}
         />
 
         {activePage === "overview" && (

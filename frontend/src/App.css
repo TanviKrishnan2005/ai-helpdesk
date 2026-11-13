@@ -1756,3 +1756,388 @@ textarea::placeholder {
     transform: translateY(0) scale(1);
   }
 }
+
+/* =========================================
+   RESPONSIVE LAYOUT
+========================================= */
+
+/* Hide mobile controls on desktop */
+.menu-button,
+.sidebar-close-button {
+  display: none;
+}
+
+/* Tablet and smaller screens */
+@media (max-width: 850px) {
+  .app-shell {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* Sidebar becomes a slide-out menu */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 1001;
+    width: 270px;
+    height: 100vh;
+    min-height: 100vh;
+    padding: 22px 17px;
+    overflow-y: auto;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    box-shadow: 5px 0 25px rgba(0, 0, 0, 0.08);
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  /* Dark overlay behind sidebar */
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(15, 25, 42, 0.45);
+    backdrop-filter: blur(2px);
+  }
+
+  .sidebar-close-button {
+    display: grid;
+    place-items: center;
+    margin-left: auto;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--navy);
+    font-size: 25px;
+  }
+
+  .sidebar-close-button:hover {
+    background: #e7e3d9;
+  }
+
+  /* Restore sidebar content and chat history */
+  .brand > div:not(.brand-mark),
+  .nav-label,
+  .nav-item,
+  .nav-item b,
+  .nav-item span,
+  .profile div:not(.avatar),
+  .profile .dots,
+  .mini-status {
+    display: initial;
+    font-size: revert;
+  }
+
+  .brand {
+    justify-content: flex-start;
+    padding: 5px 5px 30px;
+  }
+
+  .brand-mark {
+    flex-shrink: 0;
+  }
+
+  .nav-item {
+    display: flex;
+    font-size: 13px;
+  }
+
+  .nav-item span {
+    width: 17px;
+    font-size: 16px;
+    margin: 0;
+  }
+
+  .conversation-section {
+    display: block;
+  }
+
+  .profile {
+    justify-content: flex-start;
+  }
+
+  .sidebar-bottom {
+    margin-top: auto;
+  }
+
+  /* Main content */
+  .main-content {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .menu-button {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: white;
+    color: var(--navy);
+    font-size: 19px;
+  }
+
+  .topbar {
+    padding: 0 25px;
+    gap: 15px;
+  }
+
+  .page {
+    padding: 40px 30px 65px;
+  }
+
+  .support-card {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .category-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile screens */
+@media (max-width: 650px) {
+  .topbar {
+    height: 60px;
+    padding: 0 15px;
+    gap: 10px;
+  }
+
+  .breadcrumbs {
+    flex: 1;
+    min-width: 0;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .top-actions {
+    gap: 6px;
+  }
+
+  .top-user-name {
+    display: none;
+  }
+
+  .top-avatar {
+    width: 29px;
+    height: 29px;
+    margin-left: 0;
+  }
+
+  .logout-button {
+    padding: 7px 9px;
+    font-size: 10px;
+  }
+
+  .page {
+    width: 100%;
+    padding: 30px 16px 45px;
+  }
+
+  h1 {
+    font-size: 27px;
+    letter-spacing: -1px;
+  }
+
+  .page-subtitle {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .welcome-row,
+  .assistant-top {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 25px;
+  }
+
+  .support-card {
+    padding: 23px 18px;
+    gap: 20px;
+  }
+
+  .support-copy h2 {
+    font-size: 24px;
+  }
+
+  .support-copy p {
+    font-size: 11px;
+  }
+
+  .question-box {
+    padding: 12px;
+  }
+
+  .quick-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .category-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ticket-row {
+    grid-template-columns: 55px minmax(0, 1fr) 65px;
+    gap: 8px;
+  }
+
+  .ticket-row > span:last-child {
+    display: none;
+  }
+
+  .full-ticket {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .ticket-status {
+    grid-column: auto;
+  }
+
+  .section-heading {
+    margin-top: 30px;
+  }
+
+  .conversation-list {
+    max-height: 35vh;
+  }
+
+  .delete-modal {
+    padding: 24px 18px;
+  }
+}
+
+/* Very small mobile screens */
+@media (max-width: 380px) {
+  .page {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .topbar {
+    padding: 0 10px;
+  }
+
+  .breadcrumbs {
+    font-size: 9px;
+  }
+
+  .logout-button {
+    padding: 6px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .support-card {
+    padding: 19px 14px;
+  }
+}
+
+/* Prevent horizontal overflow */
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+img,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+/* Mobile sidebar spacing fixes */
+@media (max-width: 850px) {
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 22px 17px;
+  }
+
+  .sidebar .nav-section {
+    width: 100%;
+    flex-shrink: 0;
+    margin-bottom: 24px;
+  }
+
+  .sidebar .nav-label {
+    display: block;
+    padding: 0 11px 8px;
+    font-family: "DM Mono", monospace;
+    font-size: 9px;
+    letter-spacing: 1.2px;
+    white-space: nowrap;
+  }
+
+  .sidebar .nav-item {
+    width: 100%;
+    height: 42px;
+    display: flex;
+    padding: 0 11px;
+    font-size: 13px;
+    text-align: left;
+  }
+
+  .sidebar .conversation-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 5px 10px 11px;
+  }
+
+  .sidebar .conversation-heading .nav-label {
+    padding: 0;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .sidebar .new-chat-button {
+    width: auto;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 9px 12px;
+    white-space: nowrap;
+  }
+
+  .sidebar .conversation-list {
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .sidebar .sidebar-bottom {
+    margin-top: auto;
+    flex-shrink: 0;
+  }
+}

@@ -1,5 +1,5 @@
 
-function Topbar({ activePage, currentUser, onLogout }) {
+function Topbar({ activePage, currentUser, onLogout, onMenuClick }) {
   const pageNames = {
     overview: "Overview",
     assistant: "AI Assistant",
@@ -11,9 +11,17 @@ function Topbar({ activePage, currentUser, onLogout }) {
 
   return (
     <header className="topbar">
+      <button
+        type="button"
+        className="menu-button"
+        onClick={onMenuClick}
+        aria-label="Open navigation menu"
+      >
+        ☰
+      </button>
+
       <div className="breadcrumbs">
-        Workspace <span>/</span>{" "}
-        {pageNames[activePage] || activePage}
+        Workspace <span>/</span> {pageNames[activePage] || activePage}
       </div>
 
       <div className="top-actions">
