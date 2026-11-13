@@ -5,8 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import Base, engine
-from .routes import tickets, chat, dashboard, auth ,conversations
+from .routes import tickets, chat, dashboard, auth, conversations
 from app import models
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -14,16 +15,17 @@ app = FastAPI(
     version="1.0",
 )
 
-# Set FRONTEND_ORIGIN in the deployment environment.
-# For local development, the Vite frontend normally uses port 5173.
 frontend_origin = os.getenv(
     "FRONTEND_ORIGIN",
-    "http://localhost:5173",
-)
+    "https://ai-helpdesk-pi-nine.vercel.app",
+).rstrip("/")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_origin],
+    allow_origins=[
+        frontend_origin,
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,6 +36,7 @@ app.include_router(chat.router)
 app.include_router(dashboard.router)
 app.include_router(auth.router)
 app.include_router(conversations.router)
+
 
 @app.get("/")
 def root():
