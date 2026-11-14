@@ -1,6 +1,6 @@
-
 import logging
 import os
+import re
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -100,15 +100,106 @@ def prepare_history(history):
     return prepared
 
 
+# --------------------------------------------------
+# GREETING AND SMALL-TALK HANDLER
+# --------------------------------------------------
+
+def handle_small_talk(message):
+    """
+    Handle standalone greetings and casual messages
+    without triggering knowledge-base retrieval
+    or automatic ticket escalation.
+    """
+
+    text = message.lower().strip()
+
+    # Normalize punctuation and extra spaces.
+    text = re.sub(r"[^\w\s']", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    responses = {
+        "hi": "Hi! How can I help you today?",
+        "hello": "Hello! How can I assist you?",
+        "hey": "Hey! What can I help you with?",
+
+        "good morning": "Good morning! How can I help you today?",
+        "good afternoon": "Good afternoon! How can I assist you?",
+        "good evening": "Good evening! What can I help you with?",
+
+        "how are you": (
+            "I'm doing well, thank you! "
+            "How can I help you today?"
+        ),
+
+        "how are you doing": (
+            "I'm here and ready to help! "
+            "What can I do for you?"
+        ),
+
+        "thanks": (
+            "You're welcome! Let me know if you need anything else."
+        ),
+
+        "thank you": (
+            "You're welcome! Happy to help."
+        ),
+
+        "ok": (
+            "Alright! Let me know if you need any assistance."
+        ),
+
+        "okay": (
+            "Alright! Let me know if you need any assistance."
+        ),
+
+        "bye": (
+            "Goodbye! Feel free to come back whenever you need help."
+        ),
+
+        "goodbye": (
+            "Goodbye! Have a great day."
+        ),
+
+        "see you": (
+            "See you! Have a great day."
+        ),
+    }
+
+    response = responses.get(text)
+
+    if response:
+        return {
+            "response": response,
+            "resolved": True,
+            "confidence": 1.0,
+            "sources": [],
+            "ticket_id": None,
+        }
+
+    return None
+
+
+# --------------------------------------------------
+# FOLLOW-UP MESSAGE REWRITING
+# --------------------------------------------------
+
 def rewrite_follow_up(message, history):
     """Only rewrite contextual follow-ups when history exists."""
+
     if not history:
         return message
 
-    # Simple greetings and short standalone messages don't need rewriting.
     simple_messages = {
-        "hi", "hello", "hey", "thanks", "thank you",
-        "ok", "okay", "bye", "good morning", "good evening",
+        "hi",
+        "hello",
+        "hey",
+        "thanks",
+        "thank you",
+        "ok",
+        "okay",
+        "bye",
+        "good morning",
+        "good evening",
     }
 
     if message.lower().strip() in simple_messages:
@@ -144,6 +235,10 @@ def rewrite_follow_up(message, history):
 
     return message
 
+
+# --------------------------------------------------
+# PASSWORD RESET FOLLOW-UP HANDLING
+# --------------------------------------------------
 
 def is_password_email_followup(message):
     text = message.lower()
@@ -205,6 +300,10 @@ def sanitize_answer(answer, message):
     return answer
 
 
+# --------------------------------------------------
+# MAIN CHAT ENDPOINT
+# --------------------------------------------------
+
 @router.post("/")
 def chat(
     message: str,
@@ -212,6 +311,8 @@ def chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+
+    # Validate message.
     if not message or not message.strip():
         return {
             "response": "Please enter a question so I can help.",
@@ -221,28 +322,49 @@ def chat(
         }
 
     message = message.strip()
-    history = prepare_history(payload.history if payload else [])
 
-    # Step 1: Interpret the current question.
+    history = prepare_history(
+        payload.history if payload else []
+    )
+
+    # Step 1: Handle standalone greetings and small talk.
+    # This happens BEFORE RAG retrieval and ticket escalation.
+
+    small_talk_response = handle_small_talk(message)
+
+    if small_talk_response:
+        return small_talk_response
+
+    # Step 2: Interpret the current question.
     retrieval_query = rewrite_follow_up(message, history)
 
-    # Step 2: Retrieve knowledge-base passages.
+    # Step 3: Retrieve knowledge-base passages.
     try:
-        results = search_knowledge_base(retrieval_query, top_k=3)
+        results = search_knowledge_base(
+            retrieval_query,
+            top_k=3,
+        )
+
     except Exception:
         logging.exception("Knowledge-base retrieval failed")
         results = []
 
     if not results:
         return escalate_to_ticket(
-            db, message, current_user.id, 0
+            db,
+            message,
+            current_user.id,
+            0,
         )
 
     best_score = float(results[0]["score"])
 
     if best_score < MIN_RETRIEVAL_SCORE:
         return escalate_to_ticket(
-            db, message, current_user.id, best_score
+            db,
+            message,
+            current_user.id,
+            best_score,
         )
 
     relevant_results = [
@@ -253,7 +375,10 @@ def chat(
 
     if not relevant_results:
         return escalate_to_ticket(
-            db, message, current_user.id, best_score
+            db,
+            message,
+            current_user.id,
+            best_score,
         )
 
     context = "\n\n---\n\n".join(
@@ -262,38 +387,56 @@ def chat(
         for result in relevant_results
     )
 
-    # Step 3: Generate a grounded answer.
+    # Step 4: Generate a grounded answer.
+
     system_prompt = """
 You are a precise and helpful customer-support assistant.
 
 RULES:
+
 1. Answer the user's latest question using the conversation history for context.
+
 2. Use only the supplied knowledge-base passages.
+
 3. Carefully read the conversation history to identify troubleshooting
    steps the user has already attempted.
+
 4. Never recommend repeating a step the user has explicitly tried.
+
 5. Suggest the next relevant, untried troubleshooting step.
+
 6. If the user reports that a previous step did not work,
    acknowledge it briefly and continue with the next step.
+
 7. Include only steps directly relevant to the user's issue.
+
 8. Do not invent troubleshooting steps, policies, or procedures.
+
 9. If the knowledge base does not contain another useful step,
    recommend contacting the support team.
+
 10. Keep answers concise, clear, and conversational.
+
 11. Never mention source filenames.
+
 12. Never claim an action was completed unless a tool performed it.
+
 13. Never assume the user has tried a step unless they said so.
+
 14. If the user explicitly says their account is locked,
     tell them to contact support.
+
 15. Never assume an account is locked because a password reset failed.
 """
 
-
     prompt = (
         f"{system_prompt}\n\n"
-        f"Conversation context:\n{format_history(history)}\n\n"
-        f"Current user question:\n{message}\n\n"
-        f"Retrieved knowledge-base passages:\n{context}\n\n"
+        f"Conversation context:\n"
+        f"{format_history(history)}\n\n"
+        f"Current user question:\n"
+        f"{message}\n\n"
+        f"Retrieved knowledge-base passages:\n"
+        f"{context}\n\n"
         "Answer using only the supplied passages."
     )
 
@@ -306,10 +449,14 @@ RULES:
         answer = (response.text or "").strip()
 
         if not answer:
-            raise ValueError("The AI returned an empty answer.")
+            raise ValueError(
+                "The AI returned an empty answer."
+            )
 
     except Exception:
-        logging.exception("Gemini response generation failed")
+        logging.exception(
+            "Gemini response generation failed"
+        )
 
         # Do not create a ticket just because Gemini is temporarily down.
         raise HTTPException(
@@ -320,20 +467,27 @@ RULES:
             ),
         )
 
+    # Step 5: Sanitize the generated answer.
     answer = sanitize_answer(answer, message)
-    
-    escalation_phrases = [
-    "contact the support team",
-    "contact support",
-    "reach out to the support team",
-    "contact your support team",
-    ]
-    
-    if any(phrase in answer.lower() for phrase in escalation_phrases):
-        return escalate_to_ticket(
-            db, message, current_user.id, best_score
-            )
 
+    # Step 6: Check whether escalation is required.
+    escalation_phrases = [
+        "contact the support team",
+        "contact support",
+        "reach out to the support team",
+        "contact your support team",
+    ]
+
+    if any(
+        phrase in answer.lower()
+        for phrase in escalation_phrases
+    ):
+        return escalate_to_ticket(
+            db,
+            message,
+            current_user.id,
+            best_score,
+        )
 
     uncertain_phrases = [
         "the available information is insufficient",
@@ -346,21 +500,32 @@ RULES:
         "i'm unable to answer this",
     ]
 
-    if any(phrase in answer.lower() for phrase in uncertain_phrases):
+    if any(
+        phrase in answer.lower()
+        for phrase in uncertain_phrases
+    ):
         return escalate_to_ticket(
-            db, message, current_user.id, best_score
+            db,
+            message,
+            current_user.id,
+            best_score,
         )
 
+    # Step 7: Prepare source information.
     sources = [
         {
             "file": result["name"],
             "chunk_id": result["chunk_id"],
-            "relevance_score": round(float(result["score"]), 4),
+            "relevance_score": round(
+                float(result["score"]),
+                4,
+            ),
             "passage": result["content"],
         }
         for result in relevant_results
     ]
 
+    # Step 8: Return the final response.
     return {
         "response": answer,
         "resolved": True,
@@ -369,6 +534,10 @@ RULES:
         "ticket_id": None,
     }
 
+
+# --------------------------------------------------
+# CONVERSATION HISTORY FORMATTING
+# --------------------------------------------------
 
 def format_history(history):
     if not history:
