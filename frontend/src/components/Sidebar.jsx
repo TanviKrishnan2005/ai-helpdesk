@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 
 function Sidebar({
@@ -87,18 +86,19 @@ function Sidebar({
           </button>
         </div>
 
+        {/* Conversation History */}
         <div className="nav-section conversation-section">
           <div className="conversation-heading">
             <p className="nav-label">YOUR CHATS</p>
-
-            <button
-              className="new-chat-button"
-              onClick={createConversation}
-              title="Start a new chat"
-            >
-              + New Chat
-            </button>
           </div>
+
+          <button
+            className="new-chat-button"
+            onClick={createConversation}
+            title="Start a new chat"
+          >
+            + New Chat
+          </button>
 
           <div className="conversation-list">
             {conversations.length === 0 ? (
@@ -135,6 +135,7 @@ function Sidebar({
           </div>
         </div>
 
+        {/* Resources */}
         <div className="nav-section">
           <p className="nav-label">RESOURCES</p>
 
@@ -149,6 +150,7 @@ function Sidebar({
           </button>
         </div>
 
+        {/* Sidebar Footer */}
         <div className="sidebar-bottom">
           <div className="mini-status">
             <span></span>

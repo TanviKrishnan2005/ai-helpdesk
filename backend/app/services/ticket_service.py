@@ -1,20 +1,9 @@
-
 import logging
-import os
 
-from dotenv import load_dotenv
-from google import genai
 from sqlalchemy.orm import Session
 
 from ..models import Ticket
-
-load_dotenv()
-
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
-
-GEMINI_MODEL = "gemini-3.5-flash"
+from .llm_service import generate_ai_response
 
 
 def classify_ticket(message):
@@ -60,23 +49,20 @@ def classify_ticket(message):
 
 def generate_ticket_subject(message):
     try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=(
-                "Create a short support ticket subject from "
-                "the user's problem. Return only the subject, "
-                "with no quotes. Keep it under 8 words.\n\n"
-                f"User problem: {message}"
-            ),
+        prompt = (
+            "Create a short support ticket subject from "
+            "the user's problem. Return only the subject, "
+            "with no quotes. Keep it under 8 words.\n\n"
+            f"User problem: {message}"
         )
 
-        subject = (response.text or "").strip()
+        subject = generate_ai_response(prompt)
 
         if subject:
             return subject[:100]
 
     except Exception:
-        logging.exception("Gemini ticket subject generation failed")
+        logging.exception("AI ticket subject generation failed")
 
     return message[:80]
 

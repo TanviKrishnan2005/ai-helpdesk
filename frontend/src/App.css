@@ -2141,3 +2141,69 @@ svg {
     flex-shrink: 0;
   }
 }
+/* Compact ticket card layout */
+
+.full-ticket {
+    grid-template-columns: 55px minmax(0, 1fr);
+    gap: 10px 15px;
+    padding: 16px 18px;
+    align-items: start;
+}
+
+.full-ticket-main h3 {
+    font-size: 13px;
+    margin-bottom: 3px;
+}
+
+.full-ticket-main > p {
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.ticket-meta {
+    margin-top: 8px;
+}
+
+.ticket-details-button {
+    margin-top: 10px;
+}
+
+/* Place all three controls in one horizontal row */
+
+.ticket-status {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: auto auto repeat(3, minmax(0, 1fr));
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+}
+
+.ticket-status select {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    padding: 8px 25px 8px 9px;
+    font-size: 10px;
+}
+
+/* Mobile layout */
+
+@media (max-width: 650px) {
+    .full-ticket {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 15px;
+    }
+
+    .ticket-status {
+        grid-column: 1;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ticket-status select {
+        max-width: none;
+    }
+}

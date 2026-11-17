@@ -29,7 +29,7 @@ function Overview({
     const fetchStats = async () => {
       try {
         const response = await axios.get(
-          "https://ai-helpdesk-0lnj.onrender.com/dashboard/stats"
+          "http://127.0.0.1:8000/dashboard/stats"
         );
 
         setStats(response.data);

@@ -1,7 +1,5 @@
-
 import { useMemo, useState } from "react";
 import TicketForm from "./TicketForm";
-
 
 function Tickets({
   tickets,
@@ -29,6 +27,10 @@ function Tickets({
   const [priorityFilter, setPriorityFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
 
+  // Use the user's ticket number for display.
+  const getDisplayNumber = (ticket) =>
+    ticket.display_ticket_number ?? ticket.id;
+
   const openTickets = tickets.filter(
     (ticket) => ticket.status?.toLowerCase() === "open"
   ).length;
@@ -43,11 +45,13 @@ function Tickets({
 
   const categories = useMemo(
     () =>
-      [...new Set(
-        tickets
-          .map((ticket) => ticket.category)
-          .filter(Boolean)
-      )].sort(),
+      [
+        ...new Set(
+          tickets
+            .map((ticket) => ticket.category)
+            .filter(Boolean)
+        ),
+      ].sort(),
     [tickets]
   );
 
@@ -57,7 +61,8 @@ function Tickets({
     return tickets.filter((ticket) => {
       const matchesSearch =
         !query ||
-        String(ticket.id).includes(query) ||
+        String(ticket.display_ticket_number ?? ticket.id)
+          .includes(query) ||
         ticket.subject?.toLowerCase().includes(query) ||
         ticket.description?.toLowerCase().includes(query);
 
@@ -101,7 +106,7 @@ function Tickets({
     setCategoryFilter("All");
   }
 
-  async function updateStatus(ticketId, newStatus) {
+  async function updateStatus(ticketId, newStatus, displayNumber) {
     const token = localStorage.getItem("helpdesk_token");
 
     if (!token) {
@@ -116,7 +121,7 @@ function Tickets({
       const params = new URLSearchParams({ status: newStatus });
 
       const response = await fetch(
-        `https://ai-helpdesk-0lnj.onrender.com/tickets/${ticketId}/status?${params}`,
+        `http://127.0.0.1:8000/tickets/${ticketId}/status?${params}`,
         {
           method: "PATCH",
           headers: {
@@ -142,7 +147,111 @@ function Tickets({
       );
 
       setStatusMessage(
-        `Ticket #${ticketId} updated to ${newStatus}.`
+        `Ticket #${displayNumber} updated to ${newStatus}.`
+      );
+    } catch (error) {
+      setStatusMessage(
+        error.message || "Something went wrong."
+      );
+    } finally {
+      setUpdatingTicketId(null);
+    }
+  }
+
+  async function updatePriority(ticketId, newPriority, displayNumber) {
+    const token = localStorage.getItem("helpdesk_token");
+
+    if (!token) {
+      setStatusMessage("Please log in again.");
+      return;
+    }
+
+    setUpdatingTicketId(ticketId);
+    setStatusMessage("");
+
+    try {
+      const params = new URLSearchParams({ priority: newPriority });
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/tickets/${ticketId}/priority?${params}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not update ticket priority."
+        );
+      }
+
+      window.dispatchEvent(new Event("tickets-updated"));
+
+      setSelectedTicket((current) =>
+        current?.id === ticketId
+          ? { ...current, priority: newPriority }
+          : current
+      );
+
+      setStatusMessage(
+        `Ticket #${displayNumber} priority updated to ${newPriority}.`
+      );
+    } catch (error) {
+      setStatusMessage(
+        error.message || "Something went wrong."
+      );
+    } finally {
+      setUpdatingTicketId(null);
+    }
+  }
+
+  async function updateCategory(ticketId, newCategory, displayNumber) {
+    const token = localStorage.getItem("helpdesk_token");
+
+    if (!token) {
+      setStatusMessage("Please log in again.");
+      return;
+    }
+
+    setUpdatingTicketId(ticketId);
+    setStatusMessage("");
+
+    try {
+      const params = new URLSearchParams({ category: newCategory });
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/tickets/${ticketId}/category?${params}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Could not update ticket category."
+        );
+      }
+
+      window.dispatchEvent(new Event("tickets-updated"));
+
+      setSelectedTicket((current) =>
+        current?.id === ticketId
+          ? { ...current, category: newCategory }
+          : current
+      );
+
+      setStatusMessage(
+        `Ticket #${displayNumber} category updated to ${newCategory}.`
       );
     } catch (error) {
       setStatusMessage(
@@ -219,7 +328,7 @@ function Tickets({
           <input
             id="ticket-search"
             type="search"
-            placeholder="Search by ID, subject or description..."
+            placeholder="Search by ticket number, subject or description..."
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
           />
@@ -314,92 +423,154 @@ function Tickets({
             </button>
           </div>
         ) : (
-          filteredTickets.map((ticket) => (
-            <div className="full-ticket" key={ticket.id}>
-              <div className="full-ticket-id">#{ticket.id}</div>
+          filteredTickets.map((ticket) => {
+            const displayNumber = getDisplayNumber(ticket);
 
-              <div className="full-ticket-main">
-                <h3>{ticket.subject}</h3>
-                <p>{ticket.description}</p>
-
-                <div className="ticket-meta">
-                  <span>{ticket.category}</span>
-                  <span>{ticket.priority} priority</span>
+            return (
+              <div className="full-ticket" key={ticket.id}>
+                <div className="full-ticket-id">
+                  #{displayNumber}
                 </div>
 
-                <button
-                  type="button"
-                  className="ticket-details-button"
-                  aria-expanded={selectedTicket?.id === ticket.id}
-                  onClick={() =>
-                    setSelectedTicket(
-                      selectedTicket?.id === ticket.id
-                        ? null
-                        : ticket
-                    )
-                  }
-                >
-                  {selectedTicket?.id === ticket.id
-                    ? "Hide details"
-                    : "View details"}
-                </button>
+                <div className="full-ticket-main">
+                  <h3>{ticket.subject}</h3>
+                  <p>{ticket.description}</p>
 
-                {selectedTicket?.id === ticket.id && (
-                  <div className="ticket-details">
-                    <p>
-                      <strong>Ticket ID:</strong> #{ticket.id}
-                    </p>
-                    <p>
-                      <strong>Description:</strong>{" "}
-                      {ticket.description}
-                    </p>
-                    <p>
-                      <strong>Category:</strong> {ticket.category}
-                    </p>
-                    <p>
-                      <strong>Priority:</strong> {ticket.priority}
-                    </p>
-                    <p>
-                      <strong>Status:</strong> {ticket.status}
-                    </p>
-                    <p>
-                      <strong>Created:</strong>{" "}
-                      {ticket.created_at
-                        ? new Date(ticket.created_at).toLocaleString()
-                        : "Not available"}
-                    </p>
+                  <div className="ticket-meta">
+                    <span>{ticket.category}</span>
+                    <span>{ticket.priority} priority</span>
                   </div>
-                )}
-              </div>
 
-              <div className="ticket-status">
-                <i
-                  className={`status ${
-                    ticket.status?.toLowerCase().replace(/\s+/g, "-")
-                  }`}
-                />
-
-                <span>{ticket.status}</span>
-
-                <label>
-                  <span className="sr-only">
-                    Update ticket status
-                  </span>
-                  <select
-                    value={ticket.status || "Open"}
-                    disabled={updatingTicketId === ticket.id}
-                    onChange={(event) =>
-                      updateStatus(ticket.id, event.target.value)
+                  <button
+                    type="button"
+                    className="ticket-details-button"
+                    aria-expanded={selectedTicket?.id === ticket.id}
+                    onClick={() =>
+                      setSelectedTicket(
+                        selectedTicket?.id === ticket.id
+                          ? null
+                          : ticket
+                      )
                     }
                   >
-                    <option value="Open">Open</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Resolved">Resolved</option>
-                  </select>
-                </label>
+                    {selectedTicket?.id === ticket.id
+                      ? "Hide details"
+                      : "View details"}
+                  </button>
+
+                  {selectedTicket?.id === ticket.id && (
+                    <div className="ticket-details">
+                      <p>
+                        <strong>Ticket Number:</strong> #{displayNumber}
+                      </p>
+
+                      <p>
+                        <strong>Description:</strong>{" "}
+                        {ticket.description}
+                      </p>
+
+                      <p>
+                        <strong>Category:</strong> {ticket.category}
+                      </p>
+
+                      <p>
+                        <strong>Priority:</strong> {ticket.priority}
+                      </p>
+
+                      <p>
+                        <strong>Status:</strong> {ticket.status}
+                      </p>
+
+                      <p>
+                        <strong>Created:</strong>{" "}
+                        {ticket.created_at
+                          ? new Date(ticket.created_at).toLocaleString()
+                          : "Not available"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="ticket-status">
+                  <i
+                    className={`status ${
+                      ticket.status?.toLowerCase().replace(/\s+/g, "-")
+                    }`}
+                  />
+
+                  <span>{ticket.status}</span>
+
+                  <label>
+                    <span className="sr-only">
+                      Update ticket status
+                    </span>
+
+                    <select
+                      value={ticket.status || "Open"}
+                      disabled={updatingTicketId === ticket.id}
+                      onChange={(event) =>
+                        updateStatus(
+                          ticket.id,
+                          event.target.value,
+                          displayNumber
+                        )
+                      }
+                    >
+                      <option value="Open">Open</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Resolved">Resolved</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span className="sr-only">
+                      Update ticket priority
+                    </span>
+
+                    <select
+                      value={ticket.priority || "Medium"}
+                      disabled={updatingTicketId === ticket.id}
+                      onChange={(event) =>
+                        updatePriority(
+                          ticket.id,
+                          event.target.value,
+                          displayNumber
+                        )
+                      }
+                    >
+                      <option value="Low">Low </option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span className="sr-only">
+                      Update ticket category
+                    </span>
+
+                    <select
+                      value={ticket.category || "General"}
+                      disabled={updatingTicketId === ticket.id}
+                      onChange={(event) =>
+                        updateCategory(
+                          ticket.id,
+                          event.target.value,
+                          displayNumber
+                        )
+                      }
+                    >
+                      <option value="Network">Network</option>
+                      <option value="Account">Account</option>
+                      <option value="Software">Software</option>
+                      <option value="Payment">Payment</option>
+                      <option value="General">General</option>
+                    </select>
+                  </label>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </section>

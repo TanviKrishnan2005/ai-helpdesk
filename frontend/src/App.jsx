@@ -10,13 +10,19 @@ import Overview from "./components/Overview";
 import Assistant from "./components/Assistant";
 import Tickets from "./components/Tickets";
 
-const API_URL = "https://ai-helpdesk-0lnj.onrender.com";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
+// Allow enough time for a free Render instance to wake up.
+axios.defaults.timeout = 120000;
+
 const TOKEN_KEY = "helpdesk_token";
-const MAX_HISTORY_MESSAGES = 10;
+const MAX_HISTORY_MESSAGES = 30;
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [authConnectionFailed, setAuthConnectionFailed] = useState(false);
+  const [serviceError, setServiceError] = useState("");
 
   const [activePage, setActivePage] = useState("overview");
 
@@ -67,6 +73,16 @@ function App() {
       setConversations(response.data);
     } catch (error) {
       console.error("Failed to fetch conversations:", error);
+
+      if (error.response?.status === 401) {
+        handleLogout();
+      } else {
+        setServiceError(
+          !error.response
+            ? "Can't connect to the helpdesk server. Check your internet connection and try again."
+            : "Conversation history is temporarily unavailable. Please try again."
+        );
+      }
     }
   }, []);
 
@@ -86,9 +102,20 @@ function App() {
         const response = await axios.get(`${API_URL}/auth/me`);
         setCurrentUser(response.data);
       } catch (error) {
-        localStorage.removeItem(TOKEN_KEY);
-        setAuthToken(null);
-        setCurrentUser(null);
+        if (error.response?.status === 401) {
+          // Only clear the session when the server confirms the token is invalid.
+          localStorage.removeItem(TOKEN_KEY);
+          setAuthToken(null);
+          setCurrentUser(null);
+        } else {
+          // Keep the token when the server is temporarily unreachable.
+          setAuthConnectionFailed(true);
+          setServiceError(
+            !error.response
+              ? "Can't reach the helpdesk server. Check your connection and try again."
+              : "The helpdesk server is temporarily unavailable. Please try again."
+          );
+        }
       } finally {
         setAuthChecking(false);
       }
@@ -158,6 +185,12 @@ function App() {
 
       if (error.response?.status === 401) {
         handleLogout();
+      } else {
+        setServiceError(
+          !error.response
+            ? "Can't connect to the helpdesk server. Check your internet connection and try again."
+            : "Tickets are temporarily unavailable. Please try again."
+        );
       }
     }
   }, []);
@@ -195,6 +228,7 @@ function App() {
       });
 
       const newId = response.data.id;
+      setServiceError("");
 
       activeConversationRef.current = newId;
       setActiveConversationId(newId);
@@ -207,6 +241,11 @@ function App() {
       return newId;
     } catch (error) {
       console.error("Failed to create conversation:", error);
+      setServiceError(
+        !error.response
+          ? "Can't connect to the helpdesk server. Check your internet connection and try again."
+          : "Couldn't create a new conversation. Please try again."
+      );
       return null;
     }
   };
@@ -230,8 +269,14 @@ function App() {
 
       setMessage("");
       setActivePage("assistant");
+      setServiceError("");
     } catch (error) {
       console.error("Failed to open conversation:", error);
+      setServiceError(
+        !error.response
+          ? "Can't connect to the helpdesk server. Check your internet connection and try again."
+          : "Couldn't open this conversation. Please try again."
+      );
     }
   };
 
@@ -247,8 +292,14 @@ function App() {
       }
 
       await fetchConversations();
+      setServiceError("");
     } catch (error) {
       console.error("Failed to delete conversation:", error);
+      setServiceError(
+        !error.response
+          ? "Can't connect to the helpdesk server. Check your internet connection and try again."
+          : "Couldn't delete this conversation. Please try again."
+      );
     }
   };
 
@@ -280,11 +331,14 @@ function App() {
 
       await fetchTickets();
       setTicketMessage("");
+      setServiceError("");
     } catch (error) {
       console.error("Failed to create ticket:", error);
 
       if (error.response?.status === 401) {
         handleLogout();
+      } else if (!error.response) {
+        setTicketMessage("Can't connect to the helpdesk server. Check your connection and try again.");
       } else {
         setTicketMessage(
           error.response?.data?.detail ||
@@ -343,23 +397,24 @@ function App() {
         }
       }
 
-      // Associate the loading indicator with this conversation.
-      setLoadingConversationId(conversationId);
-
-      // Save the user's message.
-      await saveConversationMessage(
-        conversationId,
-        "user",
-        userMessage
-      );
-
-      // Only update messages if this conversation is still open.
+      // Show the user's message immediately, before waiting for the
+      // database save or the AI response.
       if (activeConversationRef.current === conversationId) {
         setMessages((previous) => [
           ...previous,
           { type: "user", text: userMessage },
         ]);
       }
+
+      // Show the typing indicator only after the user's message is visible.
+      setLoadingConversationId(conversationId);
+
+      // Save the user's message in the background of the chat flow.
+      await saveConversationMessage(
+        conversationId,
+        "user",
+        userMessage
+      );
 
       // Get the AI response.
       const response = await axios.post(
@@ -391,6 +446,9 @@ function App() {
         ]);
       }
 
+      // Hide the typing indicator as soon as the AI response is displayed.
+      setLoadingConversationId(null);
+
       // Save the AI response to its original conversation.
       await saveConversationMessage(
         conversationId,
@@ -399,6 +457,7 @@ function App() {
       );
 
       await fetchConversations();
+      setServiceError("");
 
       // Refresh tickets if the assistant escalated the issue.
       if (response.data.resolved === false) {
@@ -406,6 +465,16 @@ function App() {
       }
     } catch (error) {
       console.error("Failed to send message:", error);
+
+      const errorText = !error.response
+        ? "I couldn't connect to the support server. Check your internet connection and try again."
+        : error.response.status >= 500
+          ? "The support service is temporarily unavailable. Please try again in a moment."
+          : error.response.data?.detail || "I couldn't process that message. Please try again.";
+
+      if (!error.response || error.response.status >= 500) {
+        setServiceError(errorText);
+      }
 
       if (
         conversationId &&
@@ -415,7 +484,7 @@ function App() {
           ...previous,
           {
             type: "ai",
-            text: "I couldn't reach the support service. Please try again.",
+            text: errorText,
           },
         ]);
       }
@@ -430,6 +499,24 @@ function App() {
     return (
       <div className="auth-loading">
         Checking your session...
+      </div>
+    );
+  }
+
+  // If authentication could not be checked because the server is down,
+  // preserve the saved session and let the user retry instead of logging out.
+  if (authConnectionFailed && !currentUser) {
+    return (
+      <div className="auth-loading" style={{ padding: "24px", textAlign: "center" }}>
+        <h2>Helpdesk temporarily unavailable</h2>
+        <p>{serviceError || "We couldn't connect to the server."}</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          style={{ marginTop: "12px", padding: "10px 18px", cursor: "pointer" }}
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -465,6 +552,35 @@ function App() {
       />
 
       <main className="main-content">
+        {serviceError && (
+          <div
+            role="alert"
+            style={{
+              margin: "12px 20px 0",
+              padding: "12px 16px",
+              border: "1px solid #f0c36d",
+              borderRadius: "8px",
+              background: "#fff8e7",
+              color: "#754c00",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+              fontSize: "13px",
+            }}
+          >
+            <span>{serviceError}</span>
+            <button
+              type="button"
+              onClick={() => setServiceError("")}
+              aria-label="Dismiss error message"
+              style={{ border: 0, background: "transparent", cursor: "pointer", fontSize: "18px" }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <Topbar
           activePage={activePage}
           currentUser={currentUser}

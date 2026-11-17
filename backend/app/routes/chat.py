@@ -1,39 +1,29 @@
 import logging
-import os
 import re
 from typing import Literal
 
-from dotenv import load_dotenv
-from google import genai
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User
+from ..models import User ,Ticket
 from ..auth_utils import get_current_user
 from ..services.retriever import search_knowledge_base
+from ..services.llm_service import generate_ai_response
 from ..services.ticket_service import (
     create_support_ticket,
     classify_ticket,
     generate_ticket_subject,
 )
 
-load_dotenv()
-
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    raise RuntimeError("GEMINI_API_KEY is not configured.")
-
-client = genai.Client(api_key=api_key)
-GEMINI_MODEL = "gemini-3.5-flash"
-
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 MIN_RETRIEVAL_SCORE = 0.25
 MIN_SOURCE_SCORE = 0.35
-MAX_HISTORY_MESSAGES = 10
-MAX_HISTORY_CHARS = 4000
+MAX_HISTORY_MESSAGES = 30
+MAX_HISTORY_CHARS = 8000
 
 
 class HistoryMessage(BaseModel):
@@ -48,7 +38,13 @@ class ChatRequest(BaseModel):
     )
 
 
+# --------------------------------------------------
+# TICKET ESCALATION
+# --------------------------------------------------
+
 def escalate_to_ticket(db, message, user_id, confidence):
+    """Create a support ticket with a user-specific ticket number."""
+
     category, priority = classify_ticket(message)
     subject = generate_ticket_subject(message)
 
@@ -61,19 +57,53 @@ def escalate_to_ticket(db, message, user_id, confidence):
         priority=priority,
     )
 
+    # Calculate this user's ticket number.
+    display_number = db.query(Ticket).filter(
+        Ticket.user_id == user_id,
+        or_(
+            Ticket.created_at < ticket.created_at,
+            and_(
+                Ticket.created_at == ticket.created_at,
+                Ticket.id <= ticket.id,
+            ),
+        ),
+    ).count()
+
     return {
         "response": (
             "I couldn't confidently resolve your issue using the "
             "available knowledge base. "
-            f"I've created support ticket #{ticket.id} for you."
+            f"I've created support ticket #{display_number} for you."
         ),
         "resolved": False,
         "confidence": round(float(confidence), 4),
         "ticket_id": ticket.id,
+        "display_ticket_number": display_number,
+    }
+
+def ask_for_clarification(message):
+    """Ask for more details instead of prematurely creating a ticket."""
+
+    return {
+        "response": (
+            "I understand you're still experiencing an issue. "
+            "Could you share a little more detail about what happened "
+            "or what you tried so far? I'll help you with the next step."
+        ),
+        "resolved": True,
+        "confidence": 0,
+        "sources": [],
+        "ticket_id": None,
     }
 
 
+# --------------------------------------------------
+# CONVERSATION HISTORY
+# --------------------------------------------------
+
 def prepare_history(history):
+    """Keep enough recent context to preserve multi-step troubleshooting state."""
+
     prepared = []
     total_chars = 0
 
@@ -84,6 +114,7 @@ def prepare_history(history):
             continue
 
         remaining = MAX_HISTORY_CHARS - total_chars
+
         if remaining <= 0:
             break
 
@@ -97,7 +128,18 @@ def prepare_history(history):
         total_chars += len(content)
 
     prepared.reverse()
+
     return prepared
+
+
+def format_history(history):
+    if not history:
+        return "No previous conversation."
+
+    return "\n".join(
+        f"{item['role']}: {item['content']}"
+        for item in history
+    )
 
 
 # --------------------------------------------------
@@ -113,13 +155,15 @@ def handle_small_talk(message):
 
     text = message.lower().strip()
 
-    # Normalize punctuation and extra spaces.
     text = re.sub(r"[^\w\s']", "", text)
     text = re.sub(r"\s+", " ", text).strip()
 
     responses = {
         "hi": "Hi! How can I help you today?",
         "hello": "Hello! How can I assist you?",
+        "helo": "Hello! How can I assist you?",
+        "heelo": "Hello! How can I assist you?",
+        "heello": "Hello! How can I assist you?",
         "hey": "Hey! What can I help you with?",
 
         "good morning": "Good morning! How can I help you today?",
@@ -140,29 +184,18 @@ def handle_small_talk(message):
             "You're welcome! Let me know if you need anything else."
         ),
 
-        "thank you": (
-            "You're welcome! Happy to help."
-        ),
+        "thank you": "You're welcome! Happy to help.",
+        "thankyou": "You're welcome! Happy to help.",
 
-        "ok": (
-            "Alright! Let me know if you need any assistance."
-        ),
-
-        "okay": (
-            "Alright! Let me know if you need any assistance."
-        ),
+        "ok": "Alright! Let me know if you need any assistance.",
+        "okay": "Alright! Let me know if you need any assistance.",
 
         "bye": (
             "Goodbye! Feel free to come back whenever you need help."
         ),
 
-        "goodbye": (
-            "Goodbye! Have a great day."
-        ),
-
-        "see you": (
-            "See you! Have a great day."
-        ),
+        "goodbye": "Goodbye! Have a great day.",
+        "see you": "See you! Have a great day.",
     }
 
     response = responses.get(text)
@@ -180,60 +213,33 @@ def handle_small_talk(message):
 
 
 # --------------------------------------------------
-# FOLLOW-UP MESSAGE REWRITING
+# FOLLOW-UP RETRIEVAL CONTEXT
 # --------------------------------------------------
 
-def rewrite_follow_up(message, history):
-    """Only rewrite contextual follow-ups when history exists."""
+def build_retrieval_query(message, history):
+    """
+    Build a search query from the latest issue and its follow-up.
 
-    if not history:
+    This avoids making a separate LLM request just to rewrite
+    every follow-up message.
+    """
+
+    previous_user_message = next(
+        (
+            item["content"]
+            for item in reversed(history)
+            if item["role"] == "user" and item["content"].strip()
+        ),
+        None,
+    )
+
+    if not previous_user_message:
         return message
 
-    simple_messages = {
-        "hi",
-        "hello",
-        "hey",
-        "thanks",
-        "thank you",
-        "ok",
-        "okay",
-        "bye",
-        "good morning",
-        "good evening",
-    }
-
-    if message.lower().strip() in simple_messages:
-        return message
-
-    try:
-        conversation = "\n".join(
-            f"{item['role']}: {item['content']}"
-            for item in history
-        )
-
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=(
-                "Rewrite the latest user message as a standalone "
-                "customer-support search query. Preserve intent. "
-                "Return only the rewritten query.\n\n"
-                f"Conversation history:\n{conversation}\n\n"
-                f"Latest user message: {message}"
-            ),
-        )
-
-        rewritten = (response.text or "").strip()
-
-        if rewritten:
-            return rewritten[:500]
-
-    except Exception:
-        logging.warning(
-            "Follow-up rewriting failed. Using original message.",
-            exc_info=True,
-        )
-
-    return message
+    return (
+        f"Previous customer issue: {previous_user_message}\n"
+        f"Latest follow-up: {message}"
+    )
 
 
 # --------------------------------------------------
@@ -299,11 +305,689 @@ def sanitize_answer(answer, message):
 
     return answer
 
+def build_support_hours_answer(message, relevant_results):
+    """Return a concise answer for support-hours questions when the KB supports it."""
+
+    text = message.lower()
+    asks_about_hours = any(
+        phrase in text
+        for phrase in (
+            "working hours",
+            "support hours",
+            "desk hours",
+            "operating hours",
+            "opening hours",
+            "what time",
+            "when is the support",
+            "when does the support",
+            "when are you open",
+            "when is the helpdesk",
+            "when is the help desk",
+        )
+    )
+
+    if not asks_about_hours:
+        return None
+
+    hours_source_found = any(
+        "support_hours" in result["name"].lower()
+        or (
+            "support desk" in result["content"].lower()
+            and "10 am" in result["content"].lower()
+            and "weekdays" in result["content"].lower()
+        )
+        for result in relevant_results
+    )
+
+    if not hours_source_found:
+        return None
+
+    return (
+        "Our IT Support Desk is available Monday through Friday, "
+        "from 10 AM to 5 PM."
+    )
+
+
+def build_password_reset_answer(message, relevant_results):
+    """Return complete password-reset instructions from the retrieved KB."""
+
+    password_source_found = any(
+        "password" in result["name"].lower()
+        or "password reset" in result["content"].lower()
+        for result in relevant_results
+    )
+
+    if not password_source_found:
+        return None
+
+    if is_password_email_followup(message):
+        return (
+            "If you do not receive the reset email or cannot complete "
+            "the reset process, contact the support team."
+        )
+
+    text = message.lower()
+    is_reset_request = (
+        "password" in text
+        and any(
+            phrase in text
+            for phrase in (
+                "forgot", "reset", "forgotten",
+                "can't remember", "cannot remember",
+            )
+        )
+    )
+
+    if not is_reset_request:
+        return None
+
+    return (
+        "To reset your forgotten password, follow these steps:\n\n"
+        "1. Open the account login page.\n"
+        "2. Select the password reset or forgot password option.\n"
+        "3. Enter your registered email address.\n"
+        "4. Follow the password reset instructions sent to your email.\n"
+        "5. Create a new strong password.\n\n"
+        "If you do not receive the reset email or cannot complete the "
+        "reset process, contact the support team."
+    )
+
+
+
+# --------------------------------------------------
+# DETERMINISTIC WI-FI TROUBLESHOOTING
+# --------------------------------------------------
+
+WIFI_STEPS = [
+    (
+        "First, check that Wi-Fi is enabled on your device. "
+        "Tell me once you've checked."
+    ),
+    (
+        "Next, make sure you're connected to the correct Wi-Fi network. "
+        "Tell me once you've checked."
+    ),
+    (
+        "Now turn Wi-Fi off, wait a few seconds, and turn it back on. "
+        "Let me know whether that helps."
+    ),
+    (
+        "Next, restart your device and check whether Wi-Fi works afterward."
+    ),
+    (
+        "If it still doesn't work, forget the Wi-Fi network and reconnect "
+        "using the correct password."
+    ),
+    (
+        "Finally, check whether another device can connect to the same "
+        "Wi-Fi network."
+    ),
+]
+
+
+def handle_wifi_troubleshooting(
+    message,
+    history,
+    db,
+    user_id,
+    confidence=1.0,
+):
+    """
+    Follow Wi-Fi troubleshooting instructions in order.
+
+    The backend tracks completed steps instead of relying on
+    the language model to choose the next step.
+    """
+
+    current_text = message.lower()
+
+    user_messages = [
+        item["content"].lower()
+        for item in history
+        if item["role"] == "user"
+    ]
+
+    conversation_text = " ".join(
+        user_messages + [current_text]
+    )
+
+    wifi_terms = (
+    "wi-fi",
+    "wifi",
+    "wireless network",
+    )
+    # Check whether the current message explicitly mentions Wi-Fi
+    current_message_is_wifi = any(
+    term in current_text for term in wifi_terms
+    )
+    # Detect a clearly new, unrelated support topic. 
+    new_topic_terms = (
+    "password",
+    "reset",
+    "login",
+    "account",
+    "software",
+    "application",
+    "billing",
+    "payment",
+)
+    if not current_message_is_wifi and any(
+        term in current_text for term in new_topic_terms
+):
+        return None
+    # Continue Wi-Fi troubleshooting only if the conversation
+    # # is about Wi-Fi or the current message is a Wi-Fi follow-up.
+    if not any(term in conversation_text for term in wifi_terms):
+        return None
+
+    # Find the most recent step suggested by the assistant.
+    last_assistant = next(
+        (
+            item["content"]
+            for item in reversed(history)
+            if item["role"] == "assistant"
+        ),
+        "",
+    )
+
+    step_match = re.search(
+        r"Step\s+([1-6])\s*:",
+        last_assistant,
+        re.IGNORECASE,
+    )
+
+    asked_step = (
+        int(step_match.group(1))
+        if step_match
+        else None
+    )
+
+    completed = set()
+
+    # Identify steps explicitly completed by the user.
+    for text in user_messages + [current_text]:
+
+        # Step 1: Wi-Fi enabled.
+        if (
+            re.search(
+                r"wi[- ]?fi.{0,25}(enabled|already on|turned on)",
+                text,
+            )
+            or re.search(
+                r"(enabled|turned on).{0,25}wi[- ]?fi",
+                text,
+            )
+            or "wi-fi is on" in text
+            or "wifi is on" in text
+        ):
+            completed.add(1)
+
+        # Step 2: The user checked/selected the correct network or
+        # explicitly attempted to connect to the selected network.
+        if (
+            (
+                "correct network" in text
+                or "right network" in text
+            )
+            and not any(
+                word in text
+                for word in ("not ", "wrong", "isn't", "isnt")
+            )
+        ) or re.search(
+            r"\b(tried|attempted)\s+(to\s+)?connect(ing)?\b",
+            text,
+        ):
+            completed.add(2)
+
+        # Step 3: Toggle Wi-Fi.
+        if any(
+            phrase in text
+            for phrase in (
+                "off and on",
+                "turned wi-fi off",
+                "turned wifi off",
+                "toggle wi-fi",
+                "toggle wifi",
+                "toggled wi-fi",
+                "toggled wifi",
+                "turned it off and on",
+            )
+        ):
+            completed.add(3)
+
+        # Step 4: Restart device.
+        if any(
+            phrase in text
+            for phrase in (
+                "restarted my device",
+                "restarted the device",
+                "restart my device",
+                "rebooted my device",
+                "rebooted the device",
+                "restarted my laptop",
+                "restarted the laptop",
+                "restart my laptop",
+                "rebooted my laptop",
+                "rebooted the laptop",
+                "restarted my computer",
+                "restarted the computer",
+                "restart my computer",
+                "rebooted my computer",
+                "rebooted the computer",
+            )
+        ):
+            completed.add(4)
+
+        # Step 5: Forget and reconnect.
+        if (
+            ("forget" in text or "forgot" in text)
+            and (
+                "network" in text
+                or "wi-fi" in text
+                or "wifi" in text
+            )
+        ):
+            completed.add(5)
+
+        # Step 6: Test another device.
+        if any(
+            phrase in text
+            for phrase in (
+                "other devices",
+                "another device",
+                "different device",
+                "other phone",
+                "other laptop",
+            )
+        ):
+            completed.add(6)
+
+    # Replay earlier turns so short replies such as "yes" are
+    # associated with the step the assistant asked about at that time.
+    previous_assistant_step = None
+    short_affirmatives = {
+        "yes", "yep", "yeah", "done", "i did", "already did",
+        "checked", "that's done", "that is done",
+    }
+    for item in history:
+        if item["role"] == "assistant":
+            previous_match = re.search(
+                r"Step\s+([1-6])\s*:",
+                item["content"],
+                re.IGNORECASE,
+            )
+            previous_assistant_step = (
+                int(previous_match.group(1))
+                if previous_match
+                else None
+            )
+        elif item["role"] == "user":
+            previous_reply = item["content"].strip().lower()
+            if previous_assistant_step and previous_reply in short_affirmatives:
+                completed.add(previous_assistant_step)
+
+    # A clear statement that the user tried connecting to the selected
+    # network completes Step 2, even if the connection still fails.
+    if re.search(
+        r"(tried|attempted)\s+(to\s+)?connect(ing)?",
+        current_text,
+    ) or re.search(
+        r"connect(ed|ion)?\s+to\s+(the\s+)?(wi[- ]?fi|network)",
+        current_text,
+    ):
+        completed.add(2)
+
+    # Short affirmative responses confirm the step
+    # suggested in the previous assistant message.
+    affirmative = current_text.strip() in {
+        "yes",
+        "yep",
+        "yeah",
+        "done",
+        "i did",
+        "already did",
+        "checked",
+        "that's done",
+        "that is done",
+    }
+
+    negative = current_text.strip() in {
+        "no",
+        "nope",
+        "not yet",
+        "haven't",
+        "have not",
+        "i haven't",
+        "i have not",
+    }
+
+    if asked_step and affirmative:
+        completed.add(asked_step)
+
+    # If the user has not completed the requested step, give
+    # a more actionable explanation instead of repeating the
+    # same generic instruction.
+    if asked_step and negative and asked_step not in completed:
+        negative_guidance = {
+            1: (
+                "No problem. Turn on Wi-Fi using the Wi-Fi icon in your "
+                "taskbar or your laptop's network settings. Once Wi-Fi is "
+                "enabled, tell me."
+            ),
+            2: (
+                "No problem. Open your laptop's Wi-Fi settings, select the "
+                "network you want to use, and choose Connect. If prompted, "
+                "enter that network's password. Tell me once you've tried "
+                "connecting."
+            ),
+            3: (
+                "No problem. Open your Wi-Fi settings, turn Wi-Fi off, "
+                "wait a few seconds, and turn it back on. Tell me whether "
+                "you've tried this."
+            ),
+            4: (
+                "No problem. Save your work, restart your laptop, and then "
+                "check whether it can connect to Wi-Fi. Let me know when "
+                "you've tried this."
+            ),
+            5: (
+                "No problem. In your Wi-Fi settings, select the network, "
+                "choose Forget, then select it again and reconnect using "
+                "the correct password. Tell me once you've tried."
+            ),
+            6: (
+                "No problem. If possible, try connecting another phone or "
+                "computer to the same Wi-Fi network. This helps us check "
+                "whether the issue is limited to your laptop. Let me know "
+                "what happens."
+            ),
+        }
+
+        return {
+            "response": (
+                f"Step {asked_step}: "
+                f"{negative_guidance[asked_step]}"
+            ),
+            "resolved": True,
+            "confidence": 1.0,
+            "sources": [],
+            "ticket_id": None,
+        }
+
+    # Select the next uncompleted step.
+    next_step = next(
+        (
+            number
+            for number in range(1, 7)
+            if number not in completed
+        ),
+        None,
+    )
+
+    if next_step is not None:
+        return {
+            "response": (
+                f"Step {next_step}: "
+                f"{WIFI_STEPS[next_step - 1]}"
+            ),
+            "resolved": True,
+            "confidence": 1.0,
+            "sources": [],
+            "ticket_id": None,
+        }
+
+    # All documented Wi-Fi checks have been attempted.
+    return escalate_to_ticket(
+        db,
+        message,
+        user_id,
+        confidence,
+    )
+
+
+# --------------------------------------------------
+# DETERMINISTIC SOFTWARE TROUBLESHOOTING
+# --------------------------------------------------
+
+SOFTWARE_STEPS = [
+    "Close the application completely and reopen it.",
+    "Restart your device, then open the application again.",
+    "Check whether the application has any pending updates and install them if available.",
+    "Check that your device has enough available storage.",
+    "If the issue continues, reinstall the application if you are permitted to do so.",
+]
+
+def handle_software_resolution(message, history):
+    """Recognise when the user confirms that software is working."""
+
+    current_text = message.lower().strip()
+
+    resolution_phrases = (
+        "it's working now",
+        "it is working now",
+        "its working now",
+        "it's working",
+        "it is working",
+        "works now",
+        "working now",
+        "working fine",
+        "works fine",
+        "that fixed it",
+        "this fixed it",
+        "problem solved",
+        "issue resolved",
+        "it's fixed",
+        "it is fixed",
+        "all fixed",
+    )
+
+    is_resolved = any(
+        phrase in current_text
+        for phrase in resolution_phrases
+    )
+
+    if not is_resolved:
+        return None
+
+    # Confirm that the conversation is about software troubleshooting.
+    software_context = any(
+        item["role"] == "assistant"
+        and re.search(
+            r"Step\s+[1-5]\s*:",
+            item["content"],
+            re.IGNORECASE,
+        )
+        for item in history
+    )
+
+    if not software_context:
+        return None
+
+    return {
+        "response": (
+            "Glad to hear it's working now! "
+            "Your issue appears to be resolved. "
+            "If you need anything else, feel free to ask."
+        ),
+        "resolved": True,
+        "confidence": 1.0,
+        "sources": [],
+        "ticket_id": None,
+    }
+
+def handle_software_troubleshooting(
+    message,
+    history,
+    relevant_results,
+    db,
+    user_id,
+    confidence,
+):
+    """Guide the user through the documented software steps one at a time."""
+
+    source_found = any(
+        "software" in result["name"].lower()
+        or "software support" in result["content"].lower()
+        for result in relevant_results
+    )
+    if not source_found:
+        return None
+
+    current_text = message.lower().strip()
+    software_terms = ("application", "software", "app", "program")
+    issue_terms = (
+        "not working", "isn't working", "isnt working",
+        "doesn't work", "doesnt work", "won't work",
+        "wont work", "not opening", "keeps crashing",
+        "not responding", "problem", "issue",
+    )
+
+    user_messages = [
+        item["content"].lower()
+        for item in history
+        if item["role"] == "user"
+    ]
+    conversation_text = " ".join(user_messages + [current_text])
+    has_software_context = any(term in conversation_text for term in software_terms)
+    has_software_issue = any(term in current_text for term in software_terms) and any(
+        term in current_text for term in issue_terms
+    )
+
+    last_assistant = next(
+        (item["content"] for item in reversed(history) if item["role"] == "assistant"),
+        "",
+    )
+    step_match = re.search(r"Step\s+([1-5])\s*:", last_assistant, re.IGNORECASE)
+
+    # Only start this flow for a software problem, or continue an existing one.
+    if not has_software_issue and not (has_software_context and step_match):
+        return None
+
+    # Detect whether the user confirms the issue is resolved.
+    resolution_phrases = (
+    "it's working now",
+    "it is working now",
+    "its working now",
+    "yes, it's working",
+    "yes, it is working",
+    "working fine",
+    "works now",
+    "that fixed it",
+    "this fixed it",
+    "problem solved",
+    "issue resolved",
+    "it's fixed",
+    "it is fixed",
+    "all fixed",
+    )
+    if any(phrase in current_text for phrase in resolution_phrases):
+        return {
+        "response": (
+            "Glad to hear it's working now! "
+            "Your issue appears to be resolved. "
+            "If you need anything else, feel free to ask."
+        ),
+        "resolved": True,
+        "confidence": round(float(confidence), 4),
+        "sources": [],
+        "ticket_id": None,
+    }
+
+    
+    asked_step = int(step_match.group(1)) if step_match else None
+    completed = set()
+
+    # Recognize explicit reports that a documented step was attempted.
+    for text in user_messages + [current_text]:
+        if any(phrase in text for phrase in (
+            "closed and reopened", "close and reopen",
+            "reopened the application", "reopened the app",
+        )):
+            completed.add(1)
+
+        if any(phrase in text for phrase in (
+            "restarted my device", "restarted the device",
+            "rebooted my device", "rebooted the device",
+            "restarted my computer", "restarted the computer",
+        )):
+            completed.add(2)
+
+        if any(phrase in text for phrase in (
+            "checked for updates", "check for updates",
+            "installed the update", "updated the application",
+            "updated the app", "no pending updates",
+        )):
+            completed.add(3)
+
+        if any(phrase in text for phrase in (
+            "checked storage", "checked my storage",
+            "enough storage", "storage space",
+            "freed up storage", "freed storage",
+        )):
+            completed.add(4)
+
+        if any(phrase in text for phrase in (
+            "reinstalled the application", "reinstalled the app",
+            "reinstalling the application", "reinstalling the app",
+        )):
+            completed.add(5)
+
+    affirmative = current_text in {
+        "yes", "yep", "yeah", "done", "i did", "already did",
+        "checked", "that's done", "that is done",
+    }
+    negative = current_text in {
+        "no", "nope", "not yet", "haven't", "have not",
+        "i haven't", "i have not",
+    }
+
+    if asked_step and affirmative:
+        completed.add(asked_step)
+
+    if asked_step and negative and asked_step not in completed:
+        response = (
+            f"Step {asked_step}: {SOFTWARE_STEPS[asked_step - 1]} "
+            "Let me know once you've tried it."
+        )
+    else:
+        next_step = next(
+            (number for number in range(1, 6) if number not in completed),
+            None,
+        )
+        if next_step is None:
+            return escalate_to_ticket(
+                db,
+                message,
+                user_id,
+                confidence,
+            )
+
+        response = (
+            f"Step {next_step}: {SOFTWARE_STEPS[next_step - 1]} "
+            "Let me know whether that resolves the issue. If not, we'll "
+            "move on to the next step."
+        )
+
+    return {
+        "response": response,
+        "resolved": True,
+        "confidence": round(float(confidence), 4),
+        "sources": [
+            {
+                "file": result["name"],
+                "chunk_id": result["chunk_id"],
+                "relevance_score": round(float(result["score"]), 4),
+                "passage": result["content"],
+            }
+            for result in relevant_results
+        ],
+        "ticket_id": None,
+    }
+
 
 # --------------------------------------------------
 # MAIN CHAT ENDPOINT
 # --------------------------------------------------
-
 @router.post("/")
 def chat(
     message: str,
@@ -311,8 +995,6 @@ def chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
-    # Validate message.
     if not message or not message.strip():
         return {
             "response": "Please enter a question so I can help.",
@@ -327,18 +1009,57 @@ def chat(
         payload.history if payload else []
     )
 
-    # Step 1: Handle standalone greetings and small talk.
-    # This happens BEFORE RAG retrieval and ticket escalation.
-
+    # Step 1: Handle greetings and small talk.
     small_talk_response = handle_small_talk(message)
 
     if small_talk_response:
         return small_talk_response
 
-    # Step 2: Interpret the current question.
-    retrieval_query = rewrite_follow_up(message, history)
+    # Step 2: Detect explicitly locked accounts.
+    # This must run BEFORE Wi-Fi follow-up handling.
+    message_lower = message.lower()
 
-    # Step 3: Retrieve knowledge-base passages.
+    locked_account_phrases = [
+        "account is locked",
+        "account has been locked",
+        "permanently locked",
+        "locked out of my account",
+        "account locked",
+        "my account is locked",
+        "my account has been locked",
+        "company account is locked",
+        "company account has been locked",
+    ]
+
+    if any(
+        phrase in message_lower
+        for phrase in locked_account_phrases
+    ):
+        return escalate_to_ticket(
+            db,
+            message,
+            current_user.id,
+            1.0,
+        )
+
+    # Step 3: Handle Wi-Fi troubleshooting deterministically.
+    wifi_response = handle_wifi_troubleshooting(
+        message,
+        history,
+        db,
+        current_user.id,
+    )
+
+    if wifi_response:
+        return wifi_response
+
+    # Step 4: Build the retrieval query.
+    retrieval_query = build_retrieval_query(
+        message,
+        history,
+    )
+
+    # Step 5: Retrieve knowledge-base passages.
     try:
         results = search_knowledge_base(
             retrieval_query,
@@ -350,6 +1071,10 @@ def chat(
         results = []
 
     if not results:
+
+        if history:
+            return ask_for_clarification(message)
+
         return escalate_to_ticket(
             db,
             message,
@@ -360,6 +1085,10 @@ def chat(
     best_score = float(results[0]["score"])
 
     if best_score < MIN_RETRIEVAL_SCORE:
+
+        if history:
+            return ask_for_clarification(message)
+
         return escalate_to_ticket(
             db,
             message,
@@ -374,6 +1103,10 @@ def chat(
     ]
 
     if not relevant_results:
+
+        if history:
+            return ask_for_clarification(message)
+
         return escalate_to_ticket(
             db,
             message,
@@ -387,8 +1120,60 @@ def chat(
         for result in relevant_results
     )
 
-    # Step 4: Generate a grounded answer.
+    sources = [
+        {
+            "file": result["name"],
+            "chunk_id": result["chunk_id"],
+            "relevance_score": round(float(result["score"]), 4),
+            "passage": result["content"],
+        }
+        for result in relevant_results
+    ]
 
+    # Return concise, deterministic answers for supported common questions.
+    support_hours_answer = build_support_hours_answer(
+        message,
+        relevant_results,
+    )
+
+    if support_hours_answer:
+        return {
+            "response": support_hours_answer,
+            "resolved": True,
+            "confidence": round(best_score, 4),
+            "sources": sources,
+            "ticket_id": None,
+        }
+
+    # Use the complete documented procedure for password-reset requests.
+    password_reset_answer = build_password_reset_answer(
+        message,
+        relevant_results,
+    )
+
+    if password_reset_answer:
+        return {
+            "response": password_reset_answer,
+            "resolved": True,
+            "confidence": round(best_score, 4),
+            "sources": sources,
+            "ticket_id": None,
+        }
+
+    # Guide software issues through the documented steps one at a time.
+    software_response = handle_software_troubleshooting(
+        message,
+        history,
+        relevant_results,
+        db,
+        current_user.id,
+        best_score,
+    )
+
+    if software_response:
+        return software_response
+
+    # Step 6: Generate a grounded AI response.
     system_prompt = """
 You are a precise and helpful customer-support assistant.
 
@@ -412,21 +1197,28 @@ RULES:
 
 8. Do not invent troubleshooting steps, policies, or procedures.
 
-9. If the knowledge base does not contain another useful step,
-   recommend contacting the support team.
+9. Work through the numbered troubleshooting steps in order,
+   one step at a time.
 
-10. Keep answers concise, clear, and conversational.
+10. If relevant troubleshooting steps remain that the user has
+    not tried, suggest the next untried step.
 
-11. Never mention source filenames.
+11. Do not recommend contacting support while useful steps remain.
 
-12. Never claim an action was completed unless a tool performed it.
+12. If support escalation is genuinely required, begin your response
+    with exactly "ESCALATE:".
 
-13. Never assume the user has tried a step unless they said so.
+13. Otherwise begin your response with exactly "STEP:".
 
-14. If the user explicitly says their account is locked,
-    tell them to contact support.
+14. Keep answers concise, clear, and conversational.
 
-15. Never assume an account is locked because a password reset failed.
+15. When the knowledge base contains numbered instructions, include ALL relevant steps in the correct order.
+
+16. Do not skip the final steps, even if the main process appears complete.
+
+17. Preserve important final instructions, warnings, and support-contact information from the knowledge base.
+
+18. Do not unnecessarily shorten procedural answers. Prioritize completeness and accuracy over brevity.
 """
 
     prompt = (
@@ -441,12 +1233,7 @@ RULES:
     )
 
     try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-        )
-
-        answer = (response.text or "").strip()
+        answer = generate_ai_response(prompt)
 
         if not answer:
             raise ValueError(
@@ -454,11 +1241,8 @@ RULES:
             )
 
     except Exception:
-        logging.exception(
-            "Gemini response generation failed"
-        )
+        logging.exception("AI response generation failed")
 
-        # Do not create a ticket just because Gemini is temporarily down.
         raise HTTPException(
             status_code=503,
             detail=(
@@ -467,27 +1251,29 @@ RULES:
             ),
         )
 
-    # Step 5: Sanitize the generated answer.
+    # Step 7: Sanitize the generated answer.
     answer = sanitize_answer(answer, message)
 
-    # Step 6: Check whether escalation is required.
-    escalation_phrases = [
-        "contact the support team",
-        "contact support",
-        "reach out to the support team",
-        "contact your support team",
-    ]
+    # Step 8: Escalate only when explicitly requested.
+    should_escalate = (
+        answer.lstrip().upper().startswith("ESCALATE:")
+    )
 
-    if any(
-        phrase in answer.lower()
-        for phrase in escalation_phrases
-    ):
+    if should_escalate:
         return escalate_to_ticket(
             db,
             message,
             current_user.id,
             best_score,
         )
+
+    # Remove the STEP marker before displaying the answer.
+    answer = re.sub(
+    r"\bSTEP:\s*",
+    "",
+    answer,
+    flags=re.IGNORECASE,
+    ).strip()
 
     uncertain_phrases = [
         "the available information is insufficient",
@@ -511,21 +1297,7 @@ RULES:
             best_score,
         )
 
-    # Step 7: Prepare source information.
-    sources = [
-        {
-            "file": result["name"],
-            "chunk_id": result["chunk_id"],
-            "relevance_score": round(
-                float(result["score"]),
-                4,
-            ),
-            "passage": result["content"],
-        }
-        for result in relevant_results
-    ]
-
-    # Step 8: Return the final response.
+    # Step 10: Return the final response.
     return {
         "response": answer,
         "resolved": True,
@@ -533,17 +1305,3 @@ RULES:
         "sources": sources,
         "ticket_id": None,
     }
-
-
-# --------------------------------------------------
-# CONVERSATION HISTORY FORMATTING
-# --------------------------------------------------
-
-def format_history(history):
-    if not history:
-        return "No previous conversation."
-
-    return "\n".join(
-        f"{item['role']}: {item['content']}"
-        for item in history
-    )

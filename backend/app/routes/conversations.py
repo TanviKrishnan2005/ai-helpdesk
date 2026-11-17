@@ -1,10 +1,12 @@
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from datetime import datetime
+
 from ..database import get_db
 from ..models import Conversation, Message, User
 from ..auth_utils import get_current_user
+
 
 router = APIRouter(
     prefix="/conversations",
@@ -47,7 +49,10 @@ def get_conversations(
     return (
         db.query(Conversation)
         .filter(Conversation.user_id == current_user.id)
-        .order_by(Conversation.updated_at.desc())
+        .order_by(
+            Conversation.updated_at.desc(),
+            Conversation.id.desc()
+        )
         .all()
     )
 
@@ -68,7 +73,10 @@ def get_conversation(
     )
 
     if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
 
     return {
         "id": conversation.id,
@@ -102,10 +110,16 @@ def add_message(
     )
 
     if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
 
     if payload.role not in ["user", "assistant"]:
-        raise HTTPException(status_code=400, detail="Invalid message role")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid message role"
+        )
 
     message = Message(
         role=payload.role,
@@ -114,7 +128,10 @@ def add_message(
     )
 
     db.add(message)
-    conversation.updated_at = message.created_at
+
+    # Update the conversation timestamp whenever a message is added.
+    conversation.updated_at = datetime.utcnow()
+
     db.commit()
     db.refresh(message)
 
@@ -142,7 +159,10 @@ def delete_conversation(
     )
 
     if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
 
     db.delete(conversation)
     db.commit()

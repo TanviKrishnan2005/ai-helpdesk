@@ -3,7 +3,7 @@ import { useState } from "react";
 import axios from "axios";
 import "./Auth.css";
 
-const API_URL = "https://ai-helpdesk-0lnj.onrender.com";
+const API_URL = "http://127.0.0.1:8000";
 
 function Auth({ onLogin }) {
   const [isRegistering, setIsRegistering] = useState(false);
