@@ -1,215 +1,532 @@
-# AI-Based Helpdesk System
+# 🤖 AI-Based Helpdesk System
 
-An AI-powered customer support application that answers user questions using a local knowledge base, manages support tickets, and escalates unresolved issues to the support team.
+An intelligent technical support platform powered by **Generative AI, Retrieval-Augmented Generation (RAG), and automated ticket management**.
 
-## Features
+The AI-Based Helpdesk System helps users resolve common technical issues through a conversational AI assistant. It retrieves relevant information from a dedicated knowledge base, provides contextual troubleshooting guidance, and allows unresolved issues to be escalated into structured support tickets.
 
-- **AI Support Assistant:** Uses Ollama with the `qwen2.5:3b` model to generate responses grounded in knowledge-base documents.
-- **Knowledge-Base Retrieval:** Uses Sentence Transformers (`all-MiniLM-L6-v2`) and cosine similarity to retrieve relevant support documents.
-- **Automatic Ticket Escalation:** Creates support tickets when relevant information is unavailable or the AI cannot confidently resolve an issue.
-- **Ticket Management:** Supports ticket creation, status updates, category classification, and priority assignment.
-- **Authentication:** Uses JWT-based authentication to protect API endpoints.
-- **Role-Based Access:** Supports regular users and administrators, with ticket access controlled by role and ownership.
-- **Dashboard:** Displays ticket totals, statuses, priorities, and category statistics.
-- **Persistent Storage:** Uses SQLite to store users and support tickets.
-- **Frontend Interface:** Provides pages for the overview dashboard, AI assistant, and ticket management.
+🌐 **Live Application:** https://ai-helpdesk-pi-nine.vercel.app/
 
-## Technology Stack
+📡 **Backend API:** https://ai-helpdesk-0lnj.onrender.com/
 
-### Frontend
-- React
-- Vite
-- CSS
+📖 **API Documentation:** https://ai-helpdesk-0lnj.onrender.com/docs
 
-### Backend
-- Python
-- FastAPI
-- SQLAlchemy
-- SQLite
-- PyJWT-compatible JWT handling through `python-jose`
+---
 
-### AI and Retrieval
-- Ollama
-- Qwen 2.5 3B
-- Sentence Transformers
-- `all-MiniLM-L6-v2`
-- scikit-learn cosine similarity
+## ✨ Key Features
 
-### Testing
-- pytest
-- FastAPI TestClient
+### 1. AI-Powered Chatbot
+- Natural-language interaction for technical support.
+- AI-generated responses using Google's Gemini API.
+- Knowledge-base-grounded responses through RAG.
+- Greeting and small-talk handling.
 
-## Project Structure
+### 2. Retrieval-Augmented Generation (RAG)
+- Retrieves relevant information from a custom knowledge base.
+- Generates semantic embeddings using Sentence Transformers.
+- Uses cosine similarity to identify relevant content.
+- Provides retrieved context to the language model before response generation.
+
+### 3. Context-Aware Conversations
+- Maintains conversation history.
+- Understands contextual follow-up questions.
+- Handles short responses such as Yes and No.
+- Supports guided troubleshooting workflows.
+
+### 4. Guided Troubleshooting
+- Step-by-step Wi-Fi troubleshooting.
+- Software issue troubleshooting.
+- Context-aware progression through troubleshooting steps.
+- Issue escalation when troubleshooting is unsuccessful.
+
+### 5. Ticket Management
+- Create and track support tickets.
+- User-specific ticket numbering.
+- Update ticket status.
+- Modify ticket priority:
+  - Low
+  - Medium
+  - High
+- Modify ticket category:
+  - Network
+  - Account
+  - Software
+  - Payment
+  - General
+
+### 6. User Authentication
+- User registration and login.
+- JWT-based authentication.
+- Protected API endpoints.
+- User-specific ticket and conversation access.
+
+### 7. Dashboard and Conversation History
+- Dashboard statistics.
+- Persistent conversation history.
+- New conversation creation.
+- Conversations ordered by recent activity.
+
+### 8. Error Handling
+- Backend connection error handling.
+- AI service error handling.
+- User-friendly service-unavailable messages.
+- Retry functionality.
+- AI response loading indicators.
+
+---
+
+## 🏗️ System Architecture
+
+The application follows a frontend-backend architecture with separate AI, retrieval and database services.
+
+```text
+                   USER
+                    |
+                    v
+             REACT FRONTEND
+                (Vite)
+                    |
+                    | HTTP / REST API
+                    v
+              FASTAPI BACKEND
+                    |
+          +---------+----------+
+          |         |          |
+          v         v          v
+      AUTHENTI-   CHAT       TICKET
+      CATION      SERVICE    SERVICE
+          |         |
+          |         v
+          |     RAG RETRIEVER
+          |         |
+          |         v
+          |    KNOWLEDGE BASE
+          |         |
+          |         v
+          |    EMBEDDINGS
+          |         |
+          |         v
+          |  COSINE SIMILARITY
+          |         |
+          |         v
+          |     GEMINI API
+          |
+          v
+      POSTGRESQL
+      (SUPABASE)
+```
+
+### Request Processing Workflow
+
+1. The user submits a question through the React frontend.
+2. The frontend sends the request to the FastAPI backend.
+3. The backend processes the request and retrieves relevant conversation context.
+4. The RAG retriever searches the knowledge base using semantic similarity.
+5. Relevant information is added to the prompt.
+6. Gemini generates a response using the provided context.
+7. The backend returns the response to the frontend.
+8. If the issue remains unresolved, the user can escalate it into a support ticket.
+9. Conversations, messages and tickets are persisted in PostgreSQL.
+
+---
+
+## 🧠 RAG Implementation
+
+The system uses Retrieval-Augmented Generation to improve the relevance of AI responses.
+
+### Retrieval Pipeline
+
+**Step 1: Knowledge Base Preparation**
+
+Text documents are maintained inside the `knowledge_base/` directory.
+
+**Step 2: Embedding Generation**
+
+Sentence Transformers converts text into numerical vector representations.
+
+Model used:
+
+`all-MiniLM-L6-v2`
+
+**Step 3: Query Embedding**
+
+The user's question is converted into an embedding using the same model.
+
+**Step 4: Similarity Search**
+
+Cosine similarity is used to compare the query embedding with knowledge-base embeddings.
+
+**Step 5: Context Retrieval**
+
+Relevant content is selected and added to the LLM prompt.
+
+**Step 6: Response Generation**
+
+Gemini generates a natural-language response using the user's query and retrieved context.
+
+### Why RAG?
+
+- Provides access to project-specific information.
+- Improves relevance compared with relying only on general model knowledge.
+- Allows knowledge-base updates without retraining the LLM.
+- Helps reduce unsupported responses by supplying relevant context.
+
+---
+
+## 🛠️ Technology Stack
+
+| Category | Technologies |
+|---|---|
+| Frontend | React.js, Vite, JavaScript, CSS |
+| Backend | Python, FastAPI |
+| API Communication | REST APIs, Axios |
+| Database | PostgreSQL |
+| Database Hosting | Supabase |
+| ORM | SQLAlchemy |
+| Authentication | JWT |
+| AI Model | Google Gemini |
+| Local LLM | Ollama, Qwen 2.5 3B |
+| Embeddings | Sentence Transformers |
+| Embedding Model | all-MiniLM-L6-v2 |
+| Similarity Algorithm | Cosine Similarity |
+| Backend Server | Uvicorn |
+| Frontend Deployment | Vercel |
+| Backend Deployment | Render |
+| Version Control | Git, GitHub |
+
+---
+
+## 📂 Project Structure
 
 ```text
 ai-helpdesk/
-├── frontend/
-│   └── src/
-│       ├── components/
-│       ├── App.jsx
-│       └── App.css
+│
 ├── backend/
+│   │
 │   ├── app/
-│   │   ├── main.py
-│   │   ├── database.py
-│   │   ├── models.py
-│   │   ├── schemas.py
-│   │   ├── auth_utils.py
 │   │   ├── routes/
-│   │   └── services/
-│   ├── test_chat.py
-│   └── requirements.txt
-├── knowledge_base/
-│   ├── wifi.txt
-│   ├── account.txt
-│   ├── software.txt
-│   └── password.txt
+│   │   │   ├── auth.py
+│   │   │   ├── chat.py
+│   │   │   ├── conversations.py
+│   │   │   └── tickets.py
+│   │   │
+│   │   ├── services/
+│   │   │   ├── llm_service.py
+│   │   │   ├── retriever.py
+│   │   │   └── ticket_service.py
+│   │   │
+│   │   └── main.py
+│   │
+│   ├── knowledge_base/
+│   │
+│   ├── requirements.txt
+│   └── .env
+│
+├── frontend/
+│   │
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Auth.jsx
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── Overview.jsx
+│   │   │   ├── Assistant.jsx
+│   │   │   └── Tickets.jsx
+│   │   │
+│   │   ├── App.jsx
+│   │   └── App.css
+│   │
+│   ├── .env
+│   └── package.json
+│
 └── README.md
 ```
 
-## Prerequisites
+---
 
-- Python 3.11 or a compatible Python version
+## ⚙️ Installation and Setup
+
+Follow these steps to run the project locally.
+
+### Prerequisites
+
+Make sure you have installed:
+
+- Python 3.11+
 - Node.js and npm
-- Ollama
 - Git
+- PostgreSQL database or a Supabase project
+- Gemini API key (for Gemini-based response generation)
 
-## Local Setup
-
-### 1. Start Ollama
-
-Install Ollama and download the model:
+### 1. Clone the Repository
 
 ```bash
-ollama pull qwen2.5:3b
+git clone https://github.com/TanviKrishnan2005/ai-helpdesk.git
+
+cd ai-helpdesk
 ```
 
-Ensure Ollama is running before testing AI responses.
+### 2. Backend Setup
 
-### 2. Set up the backend
+Navigate to the backend directory:
 
-Open a terminal in the `backend` directory:
+```bash
+cd backend
+```
+
+Create a virtual environment:
+
+```bash
+python -m venv venv
+```
+
+Activate it on Windows:
 
 ```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
+venv\Scripts\activate
+```
+
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-Start the API:
+### 3. Configure Backend Environment Variables
 
-```powershell
-python -m uvicorn app.main:app --reload
+Create a `.env` file inside the `backend/` directory.
+
+Configure the following variables:
+
+```env
+DATABASE_URL=your_postgresql_connection_string
+
+JWT_SECRET_KEY=your_secure_random_secret
+
+GEMINI_API_KEY=your_gemini_api_key
+
+APP_ENV=development
+
+AI_PROVIDER=gemini
+
+FRONTEND_ORIGIN=http://localhost:5173
 ```
 
-The backend runs at:
+For local Ollama development, set:
 
-- API: http://127.0.0.1:8000
-- Interactive API documentation: http://127.0.0.1:8000/docs
+```env
+AI_PROVIDER=ollama
+```
 
-The local SQLite database is configured as `helpdesk.db`.
+Make sure Ollama is running and the configured model is available locally.
 
-### 3. Set up the frontend
+**Important:** Never commit `.env` files, API keys, database credentials or JWT secrets to GitHub.
 
-Open a separate terminal:
+### 4. Start the Backend
 
-```powershell
+From the `backend/` directory:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+The backend should be available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+FastAPI documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### 5. Frontend Setup
+
+Open another terminal and navigate to the frontend directory:
+
+```bash
 cd frontend
+```
+
+Install dependencies:
+
+```bash
 npm install
+```
+
+Create a `.env` file:
+
+```env
+VITE_API_URL=http://127.0.0.1:8000
+```
+
+Start the frontend:
+
+```bash
 npm run dev
 ```
 
-Open the local URL printed by Vite in the terminal.
+The frontend will generally be available at:
 
-If your frontend requires an API base URL, configure it to point to `http://127.0.0.1:8000` for local development.
-
-## Knowledge Base
-
-The knowledge base contains text documents with support instructions. The retrieval service:
-
-1. Loads available `.txt` documents.
-2. Generates embeddings using `all-MiniLM-L6-v2`.
-3. Encodes the user's question.
-4. Ranks documents using cosine similarity.
-5. Passes sufficiently relevant passages to the language model.
-
-The chat route uses retrieval-score thresholds to decide whether to provide context to the AI or escalate the issue. These thresholds should be calibrated against representative questions rather than treated as universal confidence values.
-
-## Authentication and Authorization
-
-- Users authenticate through the authentication API.
-- JWT tokens protect authenticated endpoints.
-- Expired or invalid tokens are rejected.
-- Regular users can access their own tickets.
-- Administrators can access tickets across users.
-- Ticket status updates are checked against ownership and role permissions.
-
-Configure `JWT_SECRET_KEY` through the environment for deployment. The development fallback secret must not be used in production.
-
-## API Endpoints
-
-The exact request fields can be inspected in the interactive API documentation.
-
-| Endpoint | Purpose |
-|---|---|
-| `POST /auth/register` | Register a user |
-| `POST /auth/login` | Authenticate a user |
-| `GET /auth/me` | Get the authenticated user's details |
-| `GET /tickets/` | List accessible tickets |
-| `POST /tickets/` | Create a ticket |
-| `GET /tickets/{ticket_id}` | Retrieve an accessible ticket |
-| `PATCH /tickets/{ticket_id}/status` | Update ticket status |
-| `POST /chat/` | Submit a support question |
-| `GET /dashboard/stats` | Retrieve dashboard statistics |
-
-## Testing
-
-Run the backend tests from the `backend` directory:
-
-```powershell
-python -m pytest -v
+```text
+http://localhost:5173
 ```
 
-### Verified test results
+---
 
-The test suite was run locally and reported **9 passed, 0 failed**.
+## 🔐 Authentication Workflow
 
-The tests cover:
+The application uses JSON Web Tokens (JWT) for authentication.
 
-- Empty-question handling
-- Escalation when retrieval returns no results
-- Retrieval failure handling
-- Low retrieval-score escalation
-- Ollama failure escalation
-- Ticket-creation failure handling
-- Conversation-history follow-ups
-- Sanitization of unsupported password-reset advice
-- Escalation when a follow-up has no relevant knowledge
+1. A user registers with their credentials.
+2. The backend validates the registration request.
+3. The user's password is securely hashed before storage.
+4. During login, the backend verifies the credentials.
+5. A JWT is generated after successful authentication.
+6. The frontend uses the token for subsequent protected API requests.
+7. The backend validates the token and identifies the authenticated user.
 
-Additional manual checks confirmed ticket ownership, administrator permissions, JWT expiration, dashboard authentication, knowledge-base responses, automatic escalation, dashboard statistics against SQLite, and ticket persistence after a backend restart.
+Ticket ownership checks ensure that users can only access permitted ticket records.
 
-A Starlette/AnyIO deprecation warning appeared during testing; the test suite still passed.
+---
 
-## Current Limitations
+## 🎫 Ticket Management Workflow
 
-- The knowledge base only covers the support topics documented in its text files.
-- Retrieval similarity is not a calibrated probability of factual correctness.
-- AI responses depend on Ollama and the availability of the configured model.
-- The current database configuration uses local SQLite storage.
-- Production deployment has not yet been completed.
+The ticket module connects AI-assisted troubleshooting with structured issue tracking.
 
-## Future Improvements
+A typical workflow:
 
-- Expand the knowledge base and evaluate retrieval thresholds systematically.
-- Improve automated integration and authorization tests.
-- Configure production environment variables and restrictive CORS settings.
-- Use persistent database storage suitable for the deployment platform.
-- Plan reliable hosting for the Ollama model.
-- Deploy the frontend and backend and verify communication between them.
+```text
+User reports an issue
+        |
+        v
+AI-assisted troubleshooting
+        |
+        v
+Issue resolved?
+     /       \
+   Yes        No
+   |           |
+   v           v
+ End       Create Ticket
+               |
+               v
+         Assign Priority
+               |
+               v
+         Select Category
+               |
+               v
+         Track Ticket
+```
 
-## Security Notes
+Supported priority values:
 
-- Never commit real secrets, passwords, API keys, or production environment files.
-- Use a strong, unique `JWT_SECRET_KEY` in production.
-- Configure `APP_ENV=production` and the correct `FRONTEND_ORIGIN` when deploying.
-- Review database persistence, CORS, and access control before public deployment.
+- Low
+- Medium
+- High
+
+Supported categories:
+
+- Network
+- Account
+- Software
+- Payment
+- General
+
+---
+
+## 🌐 Deployment
+
+The application is deployed using separate frontend and backend hosting services.
+
+| Component | Platform |
+|---|---|
+| Frontend | Vercel |
+| Backend | Render |
+| Database | Supabase |
+| AI Response Generation | Google Gemini API |
+
+### Production URLs
+
+**Frontend:**  
+https://ai-helpdesk-pi-nine.vercel.app/
+
+**Backend:**  
+https://ai-helpdesk-0lnj.onrender.com/
+
+**API Documentation:**  
+https://ai-helpdesk-0lnj.onrender.com/docs
+
+### Frontend Production Configuration
+
+Set the following environment variable in Vercel:
+
+```env
+VITE_API_URL=https://ai-helpdesk-0lnj.onrender.com
+```
+
+The frontend uses this variable to communicate with the deployed backend.
+
+### Backend Production Configuration
+
+Configure the required database credentials, JWT secret, Gemini API key and frontend origin in Render's environment settings.
+
+Production should use Gemini rather than the locally hosted Ollama service.
+
+---
+
+## 🧪 Testing
+
+The following functional areas are included in the project's testing plan:
+
+| Module | Test Cases |
+|---|---|
+| Authentication | Registration, login and session handling |
+| Chatbot | Greetings, general queries and AI responses |
+| RAG | Knowledge-base retrieval and relevant responses |
+| Context Handling | Follow-up questions and conversation history |
+| Troubleshooting | Wi-Fi and software troubleshooting |
+| Ticket Management | Creation, status, priority and category updates |
+| Dashboard | Statistics and ticket information |
+| Persistence | Conversation and ticket data retention |
+| Error Handling | Backend and AI service failures |
+
+---
+
+## 🚀 Future Enhancements
+
+Potential improvements include:
+
+- Admin dashboard for managing users and tickets.
+- Knowledge-base document upload and automatic indexing.
+- Support-agent assignment and management.
+- Ticket SLA monitoring and escalation.
+- Advanced analytics and reporting.
+- User feedback and AI response evaluation.
+- More comprehensive automated testing.
+- Integration with external support platforms.
+
+---
+
+## 👥 Contributors
+
+**Tanvi Lekshmi RM**  
+B.Tech Computer Science and Engineering  
+Bennett University
+
+**Anmol Malhotra**  
+B.Tech Computer Science and Engineering  
+Bennett University
+
+---
+
+## 📌 Conclusion
+
+The AI-Based Helpdesk System demonstrates how Generative AI and Retrieval-Augmented Generation can be integrated with a conventional helpdesk workflow.
+
+By combining conversational AI, semantic knowledge retrieval, contextual troubleshooting and structured ticket management, the project aims to make technical support more accessible, efficient and organised.
+
+---
+
+**Built with React, FastAPI, PostgreSQL and Generative AI.**
