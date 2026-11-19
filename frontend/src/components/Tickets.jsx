@@ -121,7 +121,7 @@ function Tickets({
       const params = new URLSearchParams({ status: newStatus });
 
       const response = await fetch(
-        `http://127.0.0.1:8000/tickets/${ticketId}/status?${params}`,
+        `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}/tickets/${ticketId}/status?${params}`,
         {
           method: "PATCH",
           headers: {
@@ -173,7 +173,7 @@ function Tickets({
       const params = new URLSearchParams({ priority: newPriority });
 
       const response = await fetch(
-        `http://127.0.0.1:8000/tickets/${ticketId}/priority?${params}`,
+        `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}/tickets/${ticketId}/priority?${params}`,
         {
           method: "PATCH",
           headers: {
@@ -225,7 +225,7 @@ function Tickets({
       const params = new URLSearchParams({ category: newCategory });
 
       const response = await fetch(
-        `http://127.0.0.1:8000/tickets/${ticketId}/category?${params}`,
+        `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}/tickets/${ticketId}/category?${params}`,
         {
           method: "PATCH",
           headers: {

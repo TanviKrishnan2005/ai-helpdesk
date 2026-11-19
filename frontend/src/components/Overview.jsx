@@ -29,7 +29,7 @@ function Overview({
     const fetchStats = async () => {
       try {
         const response = await axios.get(
-          "http://127.0.0.1:8000/dashboard/stats"
+          `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}/dashboard/stats`
         );
 
         setStats(response.data);

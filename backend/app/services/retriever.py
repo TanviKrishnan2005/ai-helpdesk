@@ -1,4 +1,3 @@
-
 from pathlib import Path
 from threading import Lock
 
@@ -26,20 +25,20 @@ _index_lock = Lock()
 
 
 def get_model():
-    """Load the embedding model once, when it is first needed."""
+    """Load the embedding model once, when first needed."""
     global model
 
     if model is None:
         with _model_lock:
             if model is None:
-                print(f"Loading embedding model: {MODEL_NAME}")
+                print(f"Loading embedding model: {MODEL_NAME}", flush=True)
 
                 model = SentenceTransformer(
                     MODEL_NAME,
                     device="cpu"
                 )
 
-                print("Embedding model loaded successfully.")
+                print("Embedding model loaded successfully.", flush=True)
 
     return model
 
@@ -81,9 +80,14 @@ def load_documents():
     documents = []
 
     if not KNOWLEDGE_BASE_DIR.exists():
+        print("Knowledge-base directory does not exist.", flush=True)
         return documents
 
-    for file_path in sorted(KNOWLEDGE_BASE_DIR.glob("*.txt")):
+    files = sorted(KNOWLEDGE_BASE_DIR.glob("*.txt"))
+
+    print(f"Knowledge-base files found: {len(files)}", flush=True)
+
+    for file_path in files:
         content = file_path.read_text(
             encoding="utf-8",
             errors="replace"
@@ -109,6 +113,7 @@ def build_index():
     global _cached_embeddings
 
     with _index_lock:
+
         files = (
             sorted(KNOWLEDGE_BASE_DIR.glob("*.txt"))
             if KNOWLEDGE_BASE_DIR.exists()
@@ -124,16 +129,31 @@ def build_index():
             for file_path in files
         )
 
+        # Reuse the existing index if files haven't changed.
         if signature == _cached_signature:
+            print("Using cached knowledge-base index.", flush=True)
             return
+
+        print("Building knowledge-base index...", flush=True)
 
         _cached_chunks = load_documents()
 
+        print(
+            f"Knowledge-base chunks loaded: {len(_cached_chunks)}",
+            flush=True
+        )
+
         if _cached_chunks:
+
             texts = [
                 item["content"]
                 for item in _cached_chunks
             ]
+
+            print(
+                "Generating embeddings for knowledge-base chunks...",
+                flush=True
+            )
 
             embedding_model = get_model()
 
@@ -143,10 +163,19 @@ def build_index():
                 show_progress_bar=False,
                 batch_size=8,
             )
+
+            print(
+                "Knowledge-base embeddings generated successfully.",
+                flush=True
+            )
+
         else:
             _cached_embeddings = None
+            print("No knowledge-base chunks available.", flush=True)
 
         _cached_signature = signature
+
+        print("Knowledge-base index is ready.", flush=True)
 
 
 def search_knowledge_base(query, top_k=3):
@@ -154,18 +183,25 @@ def search_knowledge_base(query, top_k=3):
     if not query or not query.strip():
         return []
 
+    print("\nStarting knowledge-base search...", flush=True)
+
     build_index()
 
     if not _cached_chunks or _cached_embeddings is None:
+        print("No searchable knowledge-base content found.", flush=True)
         return []
 
     embedding_model = get_model()
+
+    print("Generating query embedding...", flush=True)
 
     query_embedding = embedding_model.encode(
         [query.strip()],
         normalize_embeddings=True,
         show_progress_bar=False,
     )
+
+    print("Calculating similarity scores...", flush=True)
 
     similarities = cosine_similarity(
         query_embedding,
@@ -185,6 +221,11 @@ def search_knowledge_base(query, top_k=3):
             "content": document["content"],
             "score": float(similarities[index]),
         })
+
+    print(
+        f"Knowledge-base search completed. Results: {len(results)}",
+        flush=True
+    )
 
     return results
 
